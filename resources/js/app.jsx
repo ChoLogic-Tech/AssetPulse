@@ -5,10 +5,12 @@ import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 
+
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    // 👇 THIS SCRIPT CHECKS IF A TITLE EXISTS TO REMOVE THE ROGUE HYPHEN 👇
+    title: (title) => title && title.trim() !== '' ? `${title} - ${appName}` : appName,
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.jsx`,

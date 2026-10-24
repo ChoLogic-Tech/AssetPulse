@@ -1,5 +1,4 @@
-import { Head, Link, useForm } from '@inertiajs/react';
-import InputError from '@/Components/InputError';
+import { Head } from '@inertiajs/react';
 import InputLabel from '@/Components/InputLabel';
 import PrimaryButton from '@/Components/PrimaryButton';
 
@@ -7,6 +6,9 @@ import PrimaryButton from '@/Components/PrimaryButton';
 
 export default function Login() {
    return (
+      <>
+      {/*Page Title */}
+      <Head title='Login' />
       <div className="min-h-screen bg-slate-100 flex flex-col justify-center py-12 sm:px6 lg:px-8"> {/* Main container */}
          <div className="bg-white py-10 px-4 shadow sm:rounded-lg sm:px-10 sm:mx-auto sm:w-full sm:max-w-lg">
             {/* Henann Logo Placeholder */}
@@ -19,7 +21,7 @@ export default function Login() {
             </h2>
 
          {/* Login Form Container */}
-            <div className="mt-8 text-center sm:mx-auto sm:w-full sm:max-w-md">
+            <div className="mt-10 text-center sm:mx-auto sm:w-full sm:max-w-md">
                   <form className="space-y-6" action="#" method="POST">
                      {/* Username or Email Input Field */}
                      <div>
@@ -65,7 +67,7 @@ export default function Login() {
             <p>&copy; John Jerald Eriman. All rights reserved.</p>
             <p>Developed by ChoLogic-tech <br></br> <a href="https://github.com/ChoLogic-Tech" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800"> https://github.com/ChoLogic-Tech </a></p>
          </div>
-
       </div>
+      </>
    )
 }
