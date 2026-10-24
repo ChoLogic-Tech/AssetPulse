@@ -12,9 +12,6 @@ I am a passionate coder returning to programming as a hobby! Back in the day, I 
 - **Combining modern backends** with interactive frontends like React.
 
 ### 🛠️ Current Tech Stack & Tools
-
-![PHP](https://shields.io) ![Laravel](https://shields.io) ![React](https://shields.io) ![TailwindCSS](https://shields.io) ![PostgreSQL](https://shields.io) ![MySQL](https://shields.io) ![Git](https://shields.io)
-
 - **The Foundations:** PHP (Standard/Native), HTML5, CSS3, JavaScript, Git, GitHub
 - **Front-End:** React & Tailwind CSS for a highly interactive, responsive user interface.
 - **Glue Layer:** Inertia.js for seamless routing and state sharing between Laravel and React pages without building a detached API.
