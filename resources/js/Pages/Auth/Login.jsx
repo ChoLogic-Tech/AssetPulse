@@ -3,7 +3,6 @@ import InputLabel from '@/Components/InputLabel';
 import PrimaryButton from '@/Components/PrimaryButton';
 
 
-
 export default function Login() {
    return (
       <>
@@ -29,7 +28,7 @@ export default function Login() {
                            Username or Email
                         </InputLabel>
                         <div className="mt-1">
-                           <input id="username" type="text" placeholder="Enter username or email" required className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out" />
+                           <input id="username" type="text" placeholder="Enter username or email" autoComplete='username' required className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out" />
                         </div>
                      </div>
 
