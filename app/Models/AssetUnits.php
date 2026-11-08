@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Item_masterlist extends Model
+class AssetUnits extends Model
 {
     //
 }
