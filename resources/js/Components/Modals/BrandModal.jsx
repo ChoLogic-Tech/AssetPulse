@@ -21,7 +21,7 @@ export function BrandModal({ isOpen, onClose, mode = 'create', initialData = nul
         </div>
 
         {/* Modal Form Body */}
-        <form className="p-6 space-y-4" onSubmit={(e) => { e.preventDefault(); onClose(); }}>
+        <form className="flex flex-col p-6 space-y-4" onSubmit={(e) => { e.preventDefault(); onClose(); }}>
           <div>
             <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
               Brand Name *
@@ -29,7 +29,7 @@ export function BrandModal({ isOpen, onClose, mode = 'create', initialData = nul
             <input
               type="text"
               disabled={isViewOnly}
-              placeholder="e.g. Audio & Video Equipment"
+              placeholder="e.g. Cisco, Dell, Kingston, etc."
               defaultValue={initialData?.name || ''}
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
               required
@@ -50,7 +50,7 @@ export function BrandModal({ isOpen, onClose, mode = 'create', initialData = nul
                 type="submit"
                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition"
               >
-                {mode === 'create' ? 'Save Brand' : 'Update Changes'}
+                {mode === 'create' ? 'Save' : 'Update Changes'}
               </button>
             )}
           </div>

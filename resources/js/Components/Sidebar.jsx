@@ -2,23 +2,25 @@ import React, { useState, useEffect } from "react";
 import { BiChevronLeftCircle, BiChevronDown } from "react-icons/bi"; 
 import { Search, LayoutDashboard, Boxes, ClipboardList, ChartColumnBig,
     Database, History, Settings, Warehouse, ListCheck, ShelvingUnit, Layers,
-    Tag, UserGroup, Component, Truck, UserShield, BuildingComplex  } from 'lucide-react';
+    Tag, UserGroup, Component, Truck, UserShield, BuildingComplex, Plus,  
+    Eye} from 'lucide-react';
 import { Link, usePage } from "@inertiajs/react";
 import logo from "../img/logo.png";
 
 export default function Sidebar() {
-    const { url, props } = usePage(); // 1. Pull props from Inertia
-    const { auth } = props;           // 2. Extract auth object
-    const currentUser = auth?.user;   // 3. Get the logged-in user details
-    const currentIp = props.client_ip; //4. Read directly from props for the current IP address
+    const { url, props } = usePage(); 
+    const { auth } = props;           
+    const currentUser = auth?.user;   
+    const currentIp = props.client_ip;
 
-    // STATE: Tracks whether the sidebar layout is fully expanded (true) or collapsed (false)
     const [open, setOpen] = useState(true);
     
-    // STATE: Stores the active array index of the currently open dropdown menu
+    // STATE: Tracks the active index of the main dropdown menu
     const [openDropdown, setOpenDropdown] = useState(null);
 
-    // SidebarMenus array remains the same...
+    // STATE: Tracks the active index of the nested submenu (e.g., Property Inventory index)
+    const [openSubDropdown, setOpenSubDropdown] = useState(null);
+
     const SidebarMenus = [
         { 
             title: "Dashboard",
@@ -30,14 +32,35 @@ export default function Sidebar() {
             icon: Boxes,
             submenu: true,
             submenuItems: [
-                { title: "Warehouse", icon: Warehouse, href: "/inventory/warehouse" },
-                { title: "Property", icon: BuildingComplex, href: "/inventory/property" }
+                { 
+                    title: "Warehouse",
+                    icon: Warehouse,
+                    submenu: true, // <-- Nested Dropdown Flag
+                    submenuItems: [
+                        { title: "Central Stock Monitor", icon: Eye, href: "/inventory/warehouse" },
+                        { title: "Warehouse Stock In", icon: Plus, href: "/inventory/warehousestockin"}
+                    ]
+                },
+                { 
+                    title: "Property Inventory",
+                    icon: BuildingComplex,
+                    submenu: true, // <-- Nested Dropdown Flag
+                    submenuItems: [
+                        { title: "Property Stock Monitor", icon: Eye, href: "/inventory/propertyinventory" },
+                        { title: "Property Stock In", icon: Plus, href: "/inventory/propertystockin" }
+                    ]
+                }
             ]
         },
-        { 
+        {  
             title: "Requisitions",
             icon: ClipboardList,
-            href: "/requisitions"
+            submenu: true,
+            submenuItems: [
+                { title: "Requisitions", icon: ClipboardList, href: "/requisitions/index" },
+                { title: "Show Requisition", icon: Eye, href: "/requisitions/show" },
+                { title: "Create Requisition", icon: Plus, href: "/requisitions/create" }
+            ]
         },
         { 
             title: "Reports",
@@ -68,16 +91,26 @@ export default function Sidebar() {
             submenu: true,
             submenuItems: [
                 { title: "Users", icon: UserGroup, href: "/settings/users" },
-                { title: "Roles & Permissions", icon: UserShield, href: "/settings/roles" },
-                { title: "Property Assignments", icon: BuildingComplex, href: "/settings/assignments" },
+                { title: "Roles & Permissions", icon: UserShield, href: "/settings/rolesandpermissions" },
+                { title: "Property Assignments", icon: BuildingComplex, href: "/settings/properties" },
             ]
         }
     ];
 
+    // Auto-expand main and nested dropdowns based on the current URL
     useEffect(() => {
         SidebarMenus.forEach((menu, index) => {
-            if (menu.submenu && menu.submenuItems.some(sub => url.startsWith(sub.href))) {
-                setOpenDropdown(index);
+            if (menu.submenu) {
+                menu.submenuItems.forEach((subItem, subIndex) => {
+                    if (subItem.submenu) {
+                        if (subItem.submenuItems.some(nested => url.startsWith(nested.href))) {
+                            setOpenDropdown(index);
+                            setOpenSubDropdown(subIndex);
+                        }
+                    } else if (subItem.href && url.startsWith(subItem.href)) {
+                        setOpenDropdown(index);
+                    }
+                });
             }
         });
     }, [url]);
@@ -88,19 +121,26 @@ export default function Sidebar() {
             setOpenDropdown(index);
         } else {
             setOpenDropdown(openDropdown === index ? null : index);
+            setOpenSubDropdown(null); // Reset nested dropdown when changing main menu
         }
+    };
+
+    const handleSubDropdownToggle = (subIndex, e) => {
+        e.stopPropagation();
+        setOpenSubDropdown(openSubDropdown === subIndex ? null : subIndex);
     };
 
     return (
         <div className="flex select-none">
             <div className={`bg-slate-900 border-r border-slate-800 text-slate-300 h-screen p-4 pt-8 ${open ? "w-72" : "w-20"} duration-300 relative flex flex-col justify-between shadow-xl`}>
                 <div>
-                    {/* FLOATING ACTION SIDEBAR TOGGLE */}
+                    {/* SIDEBAR TOGGLE */}
                     <BiChevronLeftCircle 
                         className={`bg-slate-900 border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 shadow-md text-3xl rounded-full absolute -right-3.5 top-20 cursor-pointer duration-300 ${!open && "rotate-180"}`} 
                         onClick={() => {
                             setOpen(!open);
                             setOpenDropdown(null); 
+                            setOpenSubDropdown(null);
                         }} 
                     />
 
@@ -173,7 +213,7 @@ export default function Sidebar() {
                                             )}
                                         </li>
                                     ) : (
-                                        // STANDARD LINK ITEM (e.g. Dashboard, Requisitions)
+                                        // STANDARD LINK ITEM
                                         <li>
                                             <Link 
                                                 href={menu.href}
@@ -198,7 +238,7 @@ export default function Sidebar() {
                                         </li>
                                     )}
 
-                                    {/* NESTED CHILD SUBMENU CONTAINER */}
+                                    {/* FIRST LEVEL SUBMENU CONTAINER */}
                                     {menu.submenu && (
                                         <div 
                                             className={`grid transition-all duration-500 ease-in-out ${
@@ -210,22 +250,70 @@ export default function Sidebar() {
                                             <ul className="pl-6 space-y-1 overflow-hidden">
                                                 {menu.submenuItems.map((subItem, subIndex) => {
                                                     const isSubActive = url === subItem.href;
+                                                    const isSubDropdownOpen = subItem.submenu && openSubDropdown === subIndex;
 
                                                     return (
                                                         <li key={subIndex}>
-                                                            <Link 
-                                                                href={subItem.href}
-                                                                className={`flex gap-2 text-xs p-2.5 px-4 rounded-lg cursor-pointer transition-all duration-150 transform hover:translate-x-1 ${
-                                                                    isSubActive 
-                                                                        ? "bg-indigo-600/20 text-indigo-400 font-semibold" 
-                                                                        : "text-slate-400 hover:text-white hover:bg-slate-800/30"
-                                                                }`}
-                                                            >   
-                                                                {subItem.icon && (
-                                                                    <subItem.icon className={`w-4 h-4 shrink-0 transition-colors ${isSubActive ? "text-indigo-400" : "text-slate-500"}`} />
-                                                                )}
-                                                                <span>{subItem.title}</span>
-                                                            </Link>
+                                                            {subItem.submenu ? (
+                                                                /* NESTED DROPDOWN PARENT */
+                                                                <div>
+                                                                    <div 
+                                                                        onClick={(e) => handleSubDropdownToggle(subIndex, e)}
+                                                                        className={`flex items-center justify-between gap-2 text-xs p-2.5 px-4 rounded-lg cursor-pointer transition-all duration-150 text-slate-400 hover:text-white hover:bg-slate-800/30`}
+                                                                    >
+                                                                        <div className="flex items-center gap-2">
+                                                                            {subItem.icon && (
+                                                                                <subItem.icon className="w-4 h-4 shrink-0 text-slate-500" />
+                                                                            )}
+                                                                            <span>{subItem.title}</span>
+                                                                        </div>
+                                                                        <BiChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${isSubDropdownOpen && "rotate-180"}`} />
+                                                                    </div>
+
+                                                                    {/* SECOND LEVEL (NESTED) SUBMENU CONTAINER */}
+                                                                    <div className={`grid transition-all duration-400 ease-in-out ${
+                                                                        isSubDropdownOpen ? "grid-rows-[1fr] opacity-150 mt-1" : "grid-rows-[0fr] opacity-0 pointer-events-none"
+                                                                    }`}>
+                                                                        <ul className="pl-4 space-y-1 overflow-hidden border-l border-slate-800 ml-4">
+                                                                            {subItem.submenuItems.map((nestedItem, nestedIndex) => {
+                                                                                const isNestedActive = url === nestedItem.href;
+                                                                                return (
+                                                                                    <li key={nestedIndex}>
+                                                                                        <Link 
+                                                                                            href={nestedItem.href}
+                                                                                            className={`flex gap-2 text-xs p-2 px-3 rounded-lg cursor-pointer transition-all duration-150 ${
+                                                                                                isNestedActive 
+                                                                                                    ? "bg-indigo-600/20 text-indigo-400 font-semibold" 
+                                                                                                    : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                                                                                            }`}
+                                                                                        >
+                                                                                            {nestedItem.icon && (
+                                                                                                <nestedItem.icon className={`w-3.5 h-3.5 shrink-0 ${isNestedActive ? "text-indigo-400" : "text-slate-500"}`} />
+                                                                                            )}
+                                                                                            <span>{nestedItem.title}</span>
+                                                                                        </Link>
+                                                                                    </li>
+                                                                                );
+                                                                            })}
+                                                                        </ul>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                /* NORMAL SUBMENU ITEM */
+                                                                <Link 
+                                                                    href={subItem.href}
+                                                                    className={`flex gap-2 text-xs p-2.5 px-4 rounded-lg cursor-pointer transition-all duration-150 transform hover:translate-x-1 ${
+                                                                        isSubActive 
+                                                                            ? "bg-indigo-600/20 text-indigo-400 font-semibold" 
+                                                                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                                                                    }`}
+                                                                >   
+                                                                    {subItem.icon && (
+                                                                        <subItem.icon className={`w-4 h-4 shrink-0 transition-colors ${isSubActive ? "text-indigo-400" : "text-slate-500"}`} />
+                                                                    )}
+                                                                    <span>{subItem.title}</span>
+                                                                </Link>
+                                                            )}
                                                         </li>
                                                     );
                                                 })}
@@ -238,12 +326,12 @@ export default function Sidebar() {
                     </ul>
                 </div>
 
-                {/* BOTTOM SECTION: SECURE LAST LOGIN TIMESTAMP ONLY */}
+                {/* BOTTOM SECTION */}
                 {currentUser && (
-                    <div className={`border-t border-slate-800/80 p-2 mt-auto transition-all duration-300 ${!open && "flex justify-center"}`}>
-                        <div className={`mt-4 overflow-hidden transition-all duration-300 ${!open && "scale-0 w-0 opacity-0 overflow-hidden"}`}>
+                    <div className={`border-t border-slate-800/80 p-1 mt-auto transition-all duration-300 ${!open && "flex justify-center"}`}>
+                        <div className={`mt-1 overflow-hidden transition-all duration-300 ${!open && "scale-0 w-0 opacity-0 overflow-hidden"}`}>
                             <p className="text-[10px] text-slate-400 font-mono tracking-tight truncate">
-                                <span className="text-slate-500 font-semibold font-sans uppercase tracking-wider block text-[9px]">Security Audit</span>
+                                <span className="text-slate-300 font-semibold font-sans uppercase tracking-wider block text-[9px]">Security Audit</span>
                                 Last login: {currentUser.last_login_at ? new Date(currentUser.last_login_at).toLocaleString('en-US', { 
                                     timeZone: 'Asia/Manila',
                                     dateStyle: 'short', 

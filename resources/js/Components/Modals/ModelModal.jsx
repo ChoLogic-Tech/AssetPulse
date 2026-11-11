@@ -29,11 +29,24 @@ export function ModelModal({ isOpen, onClose, mode = 'create', initialData = nul
             <input
               type="text"
               disabled={isViewOnly}
-              placeholder="e.g. Audio & Video Equipment"
+              placeholder="e.g. Cisco Catalyst 9000, Dell PowerEdge R740, etc."
               defaultValue={initialData?.name || ''}
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
               required
             />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+              Brand *
+            </label>
+            <input
+              type="text"
+              disabled={isViewOnly}
+              placeholder="Seacrh for a brand eg. Cisco, Dell, HP, etc."
+              defaultValue={initialData?.brand_id || ''}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+              required
+              />
           </div>
 
           {/* Form Actions */}

@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import Sidebar from "@/Components/Sidebar";
 import Navbar from "@/Components/Navbar"; // Import the new Navbar component
+import { Toaster } from 'sonner'; // Import Sonner Toaster (Notification like sweetalert)
 
 export default function AuthenticatedLayout({ user, pageTitle, children }) {
 
@@ -18,6 +19,13 @@ export default function AuthenticatedLayout({ user, pageTitle, children }) {
         <main className="p-6 flex-1">
           {children}
         </main>
+
+        {/* Global Sonner Toaster positioned at the bottom right */}
+        <Toaster
+          position="bottom-right"
+          rigchColors
+          expand={true}
+          />
       </div>
     </div>
   );

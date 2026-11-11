@@ -42,7 +42,7 @@ class Users extends Authenticatable
 
     // 1. User belongs to ONE Role (Matches 'role_id')
     public function role() {
-        return $this->belongsTo(Roles::class, 'role_id', 'id');
+        return $this->belongsTo(Role::class, 'role_id', 'id');
     }
 
     // 2. User belongs to ONE Property (Matches 'property_id')

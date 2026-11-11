@@ -108,7 +108,7 @@ export default function Vendors() {
             className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-lg shadow-sm transition"
             >
             <Plus className="w-4 h-4" />
-            Add New Vendor
+            Add New Vendor/Supplier
             </button>
         </div>
 
@@ -197,7 +197,7 @@ export default function Vendors() {
                 ) : (
                     <tr>
                         <td colSpan="5" className="py-8 text-center text-slate-400 text-sm">
-                            No vendors found. Click "+ Add New Vendor" to create one.
+                            No vendors found. Click "+ Add New Vendor/Supplier" to create one.
                         </td>
                     </tr>
                 )}
