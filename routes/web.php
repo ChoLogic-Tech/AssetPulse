@@ -1,10 +1,16 @@
 <?php
 
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\BrandController;
+use App\Http\Controllers\ModelController;
+use App\Http\Controllers\PropertyController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\ItemMasterController;
 
 // 1. Root redirect based on auth status
 Route::get('/', function () {
@@ -97,32 +103,22 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('master-data')->name('master-data.')->group(function () {
         
         // Item Masterlists
-        Route::get('/itemmaster', function () {
-            return Inertia::render('MasterData/ItemMaster');
-        })->name('itemmaster');
+        Route::get('/itemmaster', [ItemMasterController::class, 'index'])->name('item_masterlist.index');
+
 
         // Asset Units
         Route::get('/asset-units', function () {
             return Inertia::render('MasterData/AssetUnits');
         })->name('asset-units');
 
-        // Categories (Main focus for your active link requirement)
-        Route::get('/categories', function () {
-            return Inertia::render('MasterData/Categories', [
-                // Pass database models/data here when ready, e.g.:
-                // 'categories' => \App\Models\Category::all()
-            ]);
-        })->name('categories');
+        // Categories
+        Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
 
         // Brands
-        Route::get('/brands', function () {
-            return Inertia::render('MasterData/Brands');
-        })->name('brands');
+        Route::get('/brands', [BrandController::class, 'index'])->name('brands.index');
 
         // Models
-        Route::get('/models', function () {
-            return Inertia::render('MasterData/Models');
-        })->name('models');
+        Route::get('/models', [ModelController::class, 'index'])->name('models.index');
 
         // Vendors & Suppliers
         Route::get('/vendors', function () {
@@ -138,15 +134,13 @@ Route::middleware(['auth'])->group(function () {
     })->name('audit-trail');
 
     Route::prefix('settings')->name('settings.')->group(function () {
-        Route::get('/users', function () {
-            return Inertia::render('Settings/Users');
-        })->name('users');
+
+        Route::get('/users', [UserController::class, 'index'])->name('users.index');
 
         Route::get('/rolesandpermissions', [RoleController::class, 'index'])->name('roles.index');
 
-        Route::get('/properties', function () {
-            return Inertia::render('Settings/Properties');
-        })->name('properties');
+        Route::get('/properties', [PropertyController::class, 'index'])->name('properties.index');
+        
     });
 
     // ==========================================
@@ -165,11 +159,66 @@ Route::middleware(['auth'])->group(function () {
     // ==========================================
     // INSERT DATA IN DATABASE MANAGEMENT
     // ==========================================
+    // User
+    Route::prefix('users')->name('users.')->group(function () {
+    Route::get('/', [UserController::class, 'index'])->name('index');
+    Route::post('/', [UserController::class, 'store'])->name('store'); // <-- Must be defined here
+    Route::put('/{user}', [UserController::class, 'update'])->name('update');
+    Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy');
+});
+
+    // ==========================================
+    // INSERT DATA IN DATABASE MANAGEMENT
+    // ==========================================
     // Role
     Route::prefix('roles')->name('roles.')->group(function () {
     Route::get('/', [RoleController::class, 'index'])->name('index');
-    Route::post('/', [RoleController::class, 'store'])->name('store'); // <-- Must be defined here
+    Route::post('/', [RoleController::class, 'store'])->name('store');
     Route::put('/{role}', [RoleController::class, 'update'])->name('update');
     Route::delete('/{role}', [RoleController::class, 'destroy'])->name('destroy');
-});
+    });
+
+    // ==========================================
+    // INSERT DATA IN DATABASE MANAGEMENT
+    // ==========================================
+    // Category
+    Route::prefix('categories')->name('categories.')->group(function () {
+    Route::get('/', [CategoryController::class, 'index'])->name('index');
+    Route::post('/', [CategoryController::class, 'store'])->name('store');
+    Route::put('/{category}', [CategoryController::class, 'update'])->name('update');
+    Route::delete('/{category}', [CategoryController::class, 'destroy'])->name('destroy');
+    });
+
+    // ==========================================
+    // INSERT DATA IN DATABASE MANAGEMENT
+    // ==========================================
+    // Brand
+    Route::prefix('brands')->name('brands.')->group(function () {
+    Route::get('/', [BrandController::class, 'index'])->name('index');
+    Route::post('/', [BrandController::class, 'store'])->name('store');
+    Route::put('/{brand}', [BrandController::class, 'update'])->name('update');
+    Route::delete('/{brand}', [BrandController::class, 'destroy'])->name('destroy');
+    });
+
+    // ==========================================
+    // INSERT DATA IN DATABASE MANAGEMENT
+    // ==========================================
+    // Models
+    Route::prefix('models')->name('models.')->group(function () {
+    Route::get('/', [ModelController::class, 'index'])->name('index');
+    Route::post('/', [ModelController::class, 'store'])->name('store');
+    Route::put('/models/{model}', [ModelController::class, 'update'])->name('update');
+    Route::delete('/models/{model}', [ModelController::class, 'destroy'])->name('destroy');
+    });
+
+    // ==========================================
+    // INSERT DATA IN DATABASE MANAGEMENT
+    // ==========================================
+    // Item Masterlist
+    Route::prefix('itemmaster')->name('itemmaster.')->group(function () {
+    Route::get('/', [ItemMasterController::class, 'index'])->name('index');
+    Route::post('/', [ItemMasterController::class, 'store'])->name('store');
+    Route::put('/{itemmaster}', [ItemMasterController::class, 'update'])->name('update');
+    Route::delete('/{itemmaster}', [ItemMasterController::class, 'destroy'])->name('destroy');
+    });
 });

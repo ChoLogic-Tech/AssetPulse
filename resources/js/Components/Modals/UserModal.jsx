@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { X, UserPlus, Edit3, Shield, CheckCircle2 } from 'lucide-react';
 import { useForm } from '@inertiajs/react';
+import { toast } from 'sonner';
 
 export function UserModal({ isOpen, onClose, mode = 'create', user = null, roles = [], properties = [], statuses = [] }) {
   if (!isOpen) return null;
@@ -14,7 +15,7 @@ export function UserModal({ isOpen, onClose, mode = 'create', user = null, roles
     password: '',
     role_id: user?.role_id || '',
     property_id: user?.property_id || '',
-    status: user?.status || 1,
+    status: user?.user_status || 'Active',
   });
 
   useEffect(() => {
@@ -27,7 +28,7 @@ export function UserModal({ isOpen, onClose, mode = 'create', user = null, roles
         password: '', // Kept empty unless updating password
         role_id: user.role_id || '',
         property_id: user.property_id || '',
-        status: user.status || 1,
+        status: user.user_status || 'Active',
       });
     } else {
       reset();
@@ -36,19 +37,44 @@ export function UserModal({ isOpen, onClose, mode = 'create', user = null, roles
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (isEdit) {
-      put(route('users.update', user.id), {
-        onSuccess: () => {
-          reset();
-          onClose();
-        }
+
+    if (mode === 'create') {
+      const createPromise = new Promise((resolve, reject) => {
+        post(route('users.store'), {
+          onSuccess: () => {
+            onClose();
+            setTimeout (() => resolve({ name: data.username }), 500); // Pulls name directly from form state
+            reset();
+          },
+          onError: (errors) => {
+            reject(errors);
+          },
+        });
       });
+
+      toast.promise(createPromise, {
+        loading: 'Creating user...',
+        success: (res) => `User "${res.name}" successfully created.`,
+        error: 'Failed to create user. Please check the form for errors.',
+      });
+
     } else {
-      post(route('users.store'), {
-        onSuccess: () => {
-          reset();
-          onClose();
-        }
+      const updatePromise = new Promise((resolve, reject) => {
+        put(route('users.update', user.id), {
+          onSuccess: () => {
+            onClose();
+            resolve({ name: data.username });
+          },
+          onError: (errors) => {
+            reject(errors);
+          },
+        });
+      });
+
+      toast.promise(updatePromise, {
+        loading: 'Updating user...',
+        success: (res) => `User "${res.name}" successfully updated.`,
+        error: 'Failed to update user. Please check the form for errors.',
       });
     }
   };
@@ -140,7 +166,7 @@ export function UserModal({ isOpen, onClose, mode = 'create', user = null, roles
               onChange={(e) => setData('password', e.target.value)}
               placeholder="••••••••"
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-indigo-600"
-              required={!isEdit}
+              required={!isEdit} // Only required when creating a new user
             />
             {errors.password && <span className="text-xs text-rose-500 mt-1 block">{errors.password}</span>}
           </div>
@@ -183,14 +209,8 @@ export function UserModal({ isOpen, onClose, mode = 'create', user = null, roles
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-indigo-600 bg-white"
               required
             >
-              {statuses.length > 0 ? (
-                statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)
-              ) : (
-                <>
-                  <option value={1}>Active</option>
-                  <option value={2}>Inactive</option>
-                </>
-              )}
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
             </select>
             {errors.status && <span className="text-xs text-rose-500 mt-1 block">{errors.status}</span>}
           </div>

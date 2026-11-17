@@ -2,6 +2,8 @@
 import React, { useEffect } from 'react';
 import { X, Building2, Edit3, CheckCircle2 } from 'lucide-react';
 import { useForm } from '@inertiajs/react';
+import { toast } from 'sonner';
+
 
 export function PropertyModal({ isOpen, onClose, mode = 'create', property = null }) {
   if (!isOpen) return null;
@@ -23,19 +25,44 @@ export function PropertyModal({ isOpen, onClose, mode = 'create', property = nul
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (isEdit) {
-      put(route('properties.update', property.id), {
-        onSuccess: () => {
-          reset();
-          onClose();
-        }
+
+    if (mode === 'create') {
+      const createPromise = new Promise((resolve, reject) => {
+        post(route('properties.store'), {
+          onSuccess: () => {
+            onClose();
+            setTimeout (() => resolve({ name: data.name }), 500); // Pulls name directly from form state
+            reset();
+          },
+          onError: (errors) => {
+            reject(errors);
+          },
+        });
       });
+
+      toast.promise(createPromise, {
+        loading: 'Adding property branch...',
+        success: (res) => `Branch "${res.name}" successfully created.`,
+        error: 'Failed to create branch. Please check the form for errors.',
+      });
+
     } else {
-      post(route('properties.store'), {
-        onSuccess: () => {
-          reset();
-          onClose();
-        }
+      const updatePromise = new Promise((resolve, reject) => {
+        put(route('properties.update', property.id), {
+          onSuccess: () => {
+            onClose();
+            resolve({ name: data.name });
+          },
+          onError: (errors) => {
+            reject(errors);
+          },
+        });
+      });
+
+      toast.promise(updatePromise, {
+        loading: 'Updating branch...',
+        success: (res) => `Branch "${res.name}" successfully updated.`,
+        error: 'Failed to update branch. Please check the form for errors.',
       });
     }
   };

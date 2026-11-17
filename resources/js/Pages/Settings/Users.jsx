@@ -1,19 +1,27 @@
 import React, { useState } from 'react';
 import { 
   Users as UsersIcon, Search, UserPlus, Shield, 
-  Building2, Edit3, Trash2, Eye, CheckCircle2, XCircle
+  Building2, Edit3, AlertTriangle, Trash2, CheckCircle2, XCircle
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import { UserModal } from '@/Components/Modals/UserModal';
+import { toast } from 'sonner';
 
 export default function Users({ users = [], roles = [], properties = [], statuses = [] }) {
+  console.log("RAW USERS PROP:", users);
+  console.log("RAW ROLES PROP:", roles);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('');
   const [selectedPropertyFilter, setSelectedPropertyFilter] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit'
+
+  // Delete Confirmation Modal States
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleOpenCreate = () => {
     setSelectedUser(null);
@@ -27,9 +35,36 @@ export default function Users({ users = [], roles = [], properties = [], statuse
     setIsModalOpen(true);
   };
 
-  const handleDelete = (userId, userName) => {
-    if (confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone.`)) {
-      router.delete(route('users.destroy', userId));
+  const handleOpenDelete = (user) => {
+    setUserToDelete(user);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (userToDelete) {
+      // 1. Wrap the router.delete request in a native Promise
+      const deletePromise = new Promise((resolve, reject) => {
+        router.delete(route('users.destroy', userToDelete.id), {
+          onStart: () => setIsDeleting(true),
+          onSuccess: () => {
+            setIsDeleteModalOpen(false);
+            setUserToDelete(null);
+            // Resolve with data that can be used in success message
+            setTimeout (() => resolve({ name: userToDelete.username }), 500);
+          },
+          onError: (errors) => {
+            reject(errors);
+          },
+          onFinish: () => setIsDeleting(false),
+        });
+      });
+
+      // 2. Pass the promise into Sonner's toast.promise
+      toast.promise(deletePromise, {
+        loading: 'Deleting user...',
+        success: (data) => `User "${data.name}" successfully deleted.`,
+        error: 'Failed to delete user.',
+      });
     }
   };
 
@@ -121,13 +156,16 @@ export default function Users({ users = [], roles = [], properties = [], statuse
                   <th className="py-3.5 px-4">Primary Property</th>
                   <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4">Created Date</th>
+                  <th className="py-3.5 px-4">Last Login</th>
+                  <th className="py-3.5 px-4">IP</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {filteredUsers.length > 0 ? (
-                  filteredUsers.map((user) => {
-                    const isActive = String(user.status_name || user.status).toLowerCase().includes('active');
+                  filteredUsers.map((user) => { // Changed from (users) to (user) for consistency
+                    const userStatusValue = user.user_status !== undefined ? user.user_status : user.status;
+                    const isActive = String(userStatusValue ?? '').trim().toLowerCase() === 'active';
 
                     return (
                       <tr key={user.id} className="hover:bg-slate-50/80 transition">
@@ -158,22 +196,28 @@ export default function Users({ users = [], roles = [], properties = [], statuse
                               : 'bg-rose-50 text-rose-700 border-rose-200'
                           }`}>
                             {isActive ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                            {user.status_name || (isActive ? 'Active' : 'Inactive')}
+                            {user.user_status || (isActive ? 'Active' : 'Inactive')}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-xs text-slate-400">
-                          {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+                          {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'} {/* Fixed typo from usesr to user */}
+                        </td>
+                        <td className="py-3.5 px-4 text-xs text-slate-400">
+                          {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : 'N/A'} {/* Fixed typo from usesr to user */}
+                        </td>
+                        <td className="py-3.5 px-4 text-xs text-slate-400">
+                          {user.last_login_ip} {/* Fixed typo from usesr to user */}
                         </td>
                         <td className="py-3.5 px-4 text-right space-x-1">
                           <button 
-                            onClick={() => handleOpenEdit(user)}
+                            onClick={() => handleOpenEdit(user)} // Now correctly references singular user
                             title="Edit User Details" 
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>
                           <button 
-                            onClick={() => handleDelete(user.id, `${user.fname} ${user.lname}`)}
+                            onClick={() => handleOpenDelete(user)} // Now correctly references singular user
                             title="Delete Account" 
                             className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition"
                           >
@@ -204,8 +248,46 @@ export default function Users({ users = [], roles = [], properties = [], statuse
           roles={roles}
           properties={properties}
           statuses={statuses}
+          onSuccessCreate={() => toast.success('User successfully created.')}
+          onSuccessUpdate={() => toast.success('User successfully updated.')}
         />
 
+        {/* Custom Delete Confirmation Modal */}
+        {isDeleteModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              <div className="p-6 text-center space-y-4">
+                <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Delete Role</h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Are you sure you want to remove <span className="font-semibold text-slate-700">"{userToDelete?.username}"</span>? This action cannot be undone.
+                  </p>
+                </div>
+                <div className="flex justify-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsDeleteModalOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={confirmDelete}
+                    className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-50"
+                  >
+                    {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
       </div>
     </AuthenticatedLayout>
   );

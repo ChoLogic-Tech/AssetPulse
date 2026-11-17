@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Make sure useEffect is imported
 import { 
   ShieldCheck, Search, Plus, Shield, 
   Edit3, Trash2, AlertTriangle, Loader2 
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { RoleModal } from '@/Components/Modals/RoleAndPermissionModal';
 import { toast } from 'sonner';
 
 export default function Roles({ roles = [] }) {
+  const { flash } = usePage().props; 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,31 +38,40 @@ export default function Roles({ roles = [] }) {
   };
 
   const confirmDelete = () => {
-    if (roleToDelete) {
-      // 1. Wrap the router.delete request in a native Promise
-      const deletePromise = new Promise((resolve, reject) => {
-        router.delete(route('roles.destroy', roleToDelete.id), {
-          onStart: () => setIsDeleting(true),
-          onSuccess: () => {
-            setIsDeleteModalOpen(false);
-            setRoleToDelete(null);
-            // Resolve with data that can be used in success message
-            setTimeout (() => resolve({ name: roleToDelete.name }), 500);
-          },
-          onError: (errors) => {
-            reject(errors);
-          },
-          onFinish: () => setIsDeleting(false),
-        });
-      });
+    if (!roleToDelete) return;
 
-      // 2. Pass the promise into Sonner's toast.promise
-      toast.promise(deletePromise, {
-        loading: 'Deleting role...',
-        success: (data) => `Role "${data.name}" successfully deleted.`,
-        error: 'Failed to delete role. It may be assigned to active users.',
+    const deletePromise = new Promise((resolve, reject) => {
+      router.delete(route('roles.destroy', roleToDelete.id), {
+        preserveScroll: true,
+        onStart: () => setIsDeleting(true),
+        onSuccess: (page) => {
+          // Check if Laravel flashed an error (like our PostgreSQL foreign key violation)
+          const errorFlash = page.props.flash?.error;
+
+          if (errorFlash) {
+            // Reject the promise so toast.promise catches it as an error
+            reject(errorFlash);
+          } else {
+            // Otherwise, resolve successfully
+            resolve({ name: roleToDelete.name });
+          }
+
+          setIsDeleteModalOpen(false);
+          setRoleToDelete(null);
+        },
+        onError: (errors) => {
+          reject('Failed to delete role.');
+          setIsDeleteModalOpen(false);
+        },
+        onFinish: () => setIsDeleting(false),
       });
-    }
+    });
+
+    toast.promise(deletePromise, {
+      loading: 'Deleting role...',
+      success: (data) => `Role "${data.name}" successfully deleted.`,
+      error: (err) => typeof err === 'string' ? err : 'Cannot delete this role because it is still assigned to active users.',
+    });
   };
 
   const filteredRoles = roles.filter(role => 
@@ -163,14 +173,12 @@ export default function Roles({ roles = [] }) {
           </div>
         </div>
 
-        {/* Role Modal Component with Sonner callbacks */}
+        {/* Role Modal Component */}
         <RoleModal 
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           mode={modalMode}
           role={selectedRole}
-          onSuccessCreate={() => toast.success('Role successfully created.')}
-          onSuccessUpdate={() => toast.success('Role successfully updated.')}
         />
 
         {/* Custom Delete Confirmation Modal */}
@@ -190,7 +198,10 @@ export default function Roles({ roles = [] }) {
                 <div className="flex justify-center gap-2 pt-2">
                   <button
                     type="button"
-                    onClick={() => setIsDeleteModalOpen(false)}
+                    onClick={() => {
+                      setIsDeleteModalOpen(false);
+                      setRoleToDelete(null);
+                    }}
                     className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition"
                   >
                     Cancel
@@ -199,8 +210,9 @@ export default function Roles({ roles = [] }) {
                     type="button"
                     disabled={isDeleting}
                     onClick={confirmDelete}
-                    className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-50"
+                    className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-50 inline-flex items-center gap-1.5"
                   >
+                    {isDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
                     {isDeleting ? 'Deleting...' : 'Yes, Delete'}
                   </button>
                 </div>

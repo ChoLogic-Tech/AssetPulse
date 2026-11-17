@@ -4,35 +4,12 @@ import {
   Component, Layers, AlertTriangle 
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, router } from '@inertiajs/react';
 import { ModelModal } from '@/Components/Modals/ModelModal';
+import { toast } from 'sonner';
 
-export default function Models() {
-  // Mock data mapping to the models table structure (id, name)
-  const [models, setModels] = useState([
-    {
-      id: 1,
-      name: 'Latitude 5420',
-      brand: 'Dell',
-      items_count: 24,
-      updated_at: '2026-11-01 10:30 AM'
-    },
-    {
-      id: 2,
-      name: 'EliteBook 840 G8',
-      brand: 'HP',
-      items_count: 18,
-      updated_at: '2026-10-28 02:15 PM'
-    },
-    {
-      id: 3,
-      name: 'ThinkPad X1 Carbon',
-      brand: 'Lenovo',
-      items_count: 12,
-      updated_at: '2026-10-15 08:45 AM'
-    }
-  ]);
-
+export default function Models( {model = [], brands = []} ) {
+ 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedModel, setSelectedModel] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,8 +18,7 @@ export default function Models() {
   // Delete Confirmation Modal States
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [modelToDelete, setModelToDelete] = useState(null);
-
-  const { delete: destroy, processing } = useForm();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleOpenCreate = () => {
     setSelectedModel(null);
@@ -68,18 +44,48 @@ export default function Models() {
   };
 
   const confirmDelete = () => {
-    if (modelToDelete) {
-      // If using backend integration, replace this with: destroy(route('models.destroy', modelToDelete.id))
-      setModels(models.filter(m => m.id !== modelToDelete.id));
-      setIsDeleteModalOpen(false);
-      setModelToDelete(null);
-    }
-  };
+      if (modelToDelete) {
+        // 1. Wrap the router.delete request in a native Promise
+        const deletePromise = new Promise((resolve, reject) => {
+          router.delete(route('models.destroy', modelToDelete.id), {
+            onStart: () => setIsDeleting(true),
+            onSuccess: () => {
+              setIsDeleteModalOpen(false);
+              setModelToDelete(null);
+              // Resolve with data that can be used in success message
+              setTimeout (() => resolve({ name: modelToDelete.name }), 500);
+            },
+            onError: (errors) => {
+              reject(errors);
+            },
+            onFinish: () => setIsDeleting(false),
+          });
+        });
+  
+        // 2. Pass the promise into Sonner's toast.promise
+        toast.promise(deletePromise, {
+          loading: 'Deleting model...',
+          success: (data) => `Model "${data.name}" successfully deleted.`,
+          error: 'Failed to delete model.',
+        });
+      }
+    };
 
-  const filteredModels = models.filter(model => 
+  const filteredModels = model.filter(model => 
     model.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     model.brand.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
 
   return (
     <AuthenticatedLayout pageTitle={["Master Data", "Models"]}>
@@ -140,8 +146,11 @@ export default function Models() {
                     filteredModels.map((model) => (
                     <tr key={model.id} className="hover:bg-slate-50/80 transition">
                         <td className="py-3.5 px-4">
-                            <div className="font-semibold text-slate-900">{model.name}</div>
-                            <div className="text-xs text-slate-400 font-mono">Brand: {model.brand} | ID: #{model.id}</div>
+                          <div className="font-semibold text-slate-900">{model.name}</div>
+                          {/* Display the brand name using model.brand?.name */}
+                          <div className="text-xs text-slate-400 font-mono">
+                            Brand: {model.brand?.name || 'N/A'} | ID: #{model.id}
+                          </div>
                         </td>
                         <td className="py-3.5 px-4">
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
@@ -150,7 +159,7 @@ export default function Models() {
                             </span>
                         </td>
                         <td className="py-3.5 px-4 text-xs text-slate-400">
-                            {model.updated_at}
+                            {formatDate(model.updated_at)}
                         </td>
                         <td className="py-3.5 px-4 text-right">
                             <div className="flex items-center justify-end gap-1">
@@ -197,6 +206,9 @@ export default function Models() {
             onClose={() => setIsModalOpen(false)}
             mode={modalMode}
             initialData={selectedModel}
+            brands={brands}
+            onSuccessCreate={() => toast.success('Model successfully created.')}
+            onSuccessUpdate={() => toast.success('Model successflly updated.')}
         />
 
         {/* Custom Delete Confirmation Modal */}
@@ -223,11 +235,11 @@ export default function Models() {
                   </button>
                   <button
                     type="button"
-                    disabled={processing}
+                    disabled={isDeleting}
                     onClick={confirmDelete}
                     className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-50"
                   >
-                    {processing ? 'Deleting...' : 'Yes, Delete'}
+                    {isDeleting ? 'Deleting...' : 'Yes, Delete'}
                   </button>
                 </div>
               </div>

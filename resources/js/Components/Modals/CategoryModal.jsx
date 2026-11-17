@@ -1,9 +1,78 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useForm } from '@inertiajs/react';
+import { toast } from 'sonner';
 
-export function CategoryModal({ isOpen, onClose, mode = 'create', initialData = null }) {
+
+export function CategoryModal({
+  isOpen,
+  onClose,
+  mode = 'create',
+  initialData = null 
+}) {
+
+
   if (!isOpen) return null;
 
   const isViewOnly = mode === 'view';
+  const isEdit = mode === 'edit';
+
+  const { data, setData, post, put, processing, errors, reset } = useForm({
+      name: initialData?.name,
+    });
+  
+    useEffect(() => {
+      if (initialData && (isEdit || isViewOnly)) {
+        setData({
+          name: initialData.name || '',
+        });
+      } else {
+        reset();
+      }
+    }, [isOpen, initialData, mode]);
+  
+    const handleSubmit = (e) => {
+      e.preventDefault();
+  
+      if (mode === 'create') {
+        const createPromise = new Promise((resolve, reject) => {
+          post(route('categories.store'), {
+            onSuccess: () => {
+              onClose();
+              setTimeout (() => resolve({ name: data.name }), 500); // Pulls name directly from form state
+              reset();
+            },
+            onError: (errors) => {
+              reject(errors);
+            },
+          });
+        });
+  
+        toast.promise(createPromise, {
+          loading: 'Adding category...',
+          success: (res) => `Category "${res.name}" successfully created.`,
+          error: 'Failed to create category. Please check the form for errors.',
+        });
+  
+      } else {
+        const updatePromise = new Promise((resolve, reject) => {
+          put(route('categories.update', initialData.id), {
+            onSuccess: () => {
+              onClose();
+              resolve({ name: data.name });
+            },
+            onError: (errors) => {
+              reject(errors);
+            },
+          });
+        });
+  
+        toast.promise(updatePromise, {
+          loading: 'Updating category...',
+          success: (res) => `Category "${res.name}" successfully updated.`,
+          error: 'Failed to update category. Please check the form for errors.',
+        });
+      }
+    };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
@@ -21,7 +90,7 @@ export function CategoryModal({ isOpen, onClose, mode = 'create', initialData = 
         </div>
 
         {/* Modal Form Body */}
-        <form className="p-6 space-y-4" onSubmit={(e) => { e.preventDefault(); onClose(); }}>
+        <form className="p-6 space-y-4" onSubmit={handleSubmit}>
           <div>
             <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
               Category Name *
@@ -30,10 +99,12 @@ export function CategoryModal({ isOpen, onClose, mode = 'create', initialData = 
               type="text"
               disabled={isViewOnly}
               placeholder="e.g. Networking, Computer Peripherals, etc."
-              defaultValue={initialData?.name || ''}
+              value={data?.name}
+              onChange={(e) => setData('name', e.target.value)}
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
               required
             />
+            {errors.name && <p className="text-xs text-rose-600 mt-1">{errors.name}</p>}
           </div>
 
           {/* Form Actions */}
@@ -41,16 +112,20 @@ export function CategoryModal({ isOpen, onClose, mode = 'create', initialData = 
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition"
+              className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               {isViewOnly ? 'Close' : 'Cancel'}
             </button>
             {!isViewOnly && (
               <button
                 type="submit"
+                disabled={processing}
                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition"
               >
-                {mode === 'create' ? 'Save' : 'Update Changes'}
+                {processing 
+                  ? (mode === 'create' ? 'Creating...' : 'Saving...') 
+                  : (mode === 'create' ? 'Create Category' : 'Save Changes')
+                }
               </button>
             )}
           </div>

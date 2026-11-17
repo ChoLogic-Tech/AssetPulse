@@ -4,42 +4,20 @@ import {
   FolderTree, Layers, AlertTriangle 
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, router } from '@inertiajs/react';
 import { CategoryModal } from '@/Components/Modals/CategoryModal';
+import { toast } from 'sonner'
 
-export default function Categories() {
-  // Mock data mapping to the categories table structure (id, name)
-  const [categories, setCategories] = useState([
-    {
-      id: 1,
-      name: 'Laptops',
-      items_count: 14,
-      updated_at: '2026-11-01 10:30 AM'
-    },
-    {
-      id: 2,
-      name: 'Peripherals',
-      items_count: 32,
-      updated_at: '2026-10-28 02:15 PM'
-    },
-    {
-      id: 3,
-      name: 'Networking',
-      items_count: 8,
-      updated_at: '2026-10-15 08:45 AM'
-    }
-  ]);
-
+export default function Categories({ category = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit' | 'view'
+  const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit'
 
   // Delete Confirmation Modal States
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
-
-  const { delete: destroy, processing } = useForm();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleOpenCreate = () => {
     setSelectedCategory(null);
@@ -53,28 +31,47 @@ export default function Categories() {
     setIsModalOpen(true);
   };
 
+  const handleOpenDelete = (category) => {
+    setCategoryToDelete(category);
+    setIsDeleteModalOpen(true);
+  };
+
   const handleOpenView = (category) => {
     setSelectedCategory(category);
     setModalMode('view');
     setIsModalOpen(true);
   };
 
-  const handleOpenDelete = (category) => {
-    setCategoryToDelete(category);
-    setIsDeleteModalOpen(true);
-  };
-
   const confirmDelete = () => {
     if (categoryToDelete) {
-      // If using backend integration, replace this with: destroy(route('categories.destroy', categoryToDelete.id))
-      setCategories(categories.filter(cat => cat.id !== categoryToDelete.id));
-      setIsDeleteModalOpen(false);
-      setCategoryToDelete(null);
+      // 1. Wrap the router.delete request in a native Promise
+      const deletePromise = new Promise((resolve, reject) => {
+        router.delete(route('categories.destroy', categoryToDelete.id), {
+          onStart: () => setIsDeleting(true),
+          onSuccess: () => {
+            setIsDeleteModalOpen(false);
+            setCategoryToDelete(null);
+            // Resolve with data that can be used in success message
+            setTimeout (() => resolve({ name: categoryToDelete.name }), 500);
+          },
+          onError: (errors) => {
+            reject(errors);
+          },
+          onFinish: () => setIsDeleting(false),
+        });
+      });
+
+      // 2. Pass the promise into Sonner's toast.promise
+      toast.promise(deletePromise, {
+        loading: 'Deleting category...',
+        success: (data) => `Category "${data.name}" successfully deleted.`,
+        error: 'Failed to delete category.',
+      });
     }
   };
 
-  const filteredCategories = categories.filter(cat => 
-    cat.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredCategories = category.filter(category => 
+    category.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -193,6 +190,8 @@ export default function Categories() {
             onClose={() => setIsModalOpen(false)}
             mode={modalMode}
             initialData={selectedCategory}
+            onSuccessCreate={() => toast.success('Category successfully created.')}
+            onSuccessUpdate={() => toast.success('Category successflly updated.')}
         />
 
         {/* Custom Delete Confirmation Modal */}
@@ -219,11 +218,11 @@ export default function Categories() {
                   </button>
                   <button
                     type="button"
-                    disabled={processing}
+                    disabled={isDeleting}
                     onClick={confirmDelete}
                     className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-50"
                   >
-                    {processing ? 'Deleting...' : 'Yes, Delete'}
+                    {isDeleting ? 'Deleting...' : 'Yes, Delete'}
                   </button>
                 </div>
               </div>

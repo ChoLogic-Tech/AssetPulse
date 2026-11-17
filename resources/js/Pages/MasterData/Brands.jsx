@@ -4,32 +4,12 @@ import {
   Tag, Layers, AlertTriangle 
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, router } from '@inertiajs/react';
 import { BrandModal } from '@/Components/Modals/BrandModal';
+import { toast } from 'sonner';
 
-export default function Brands() {
-  // Mock data mapping to the brands table structure (id, name)
-  const [brands, setBrands] = useState([
-    {
-      id: 1,
-      name: 'Dell',
-      items_count: 45,
-      updated_at: '2026-11-01 10:30 AM'
-    },
-    {
-      id: 2,
-      name: 'HP',
-      items_count: 28,
-      updated_at: '2026-10-28 02:15 PM'
-    },
-    {
-      id: 3,
-      name: 'Lenovo',
-      items_count: 19,
-      updated_at: '2026-10-15 08:45 AM'
-    }
-  ]);
-
+export default function Brands( { brand = [] }) {
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -38,8 +18,7 @@ export default function Brands() {
   // Delete Confirmation Modal States
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [brandToDelete, setBrandToDelete] = useState(null);
-
-  const { delete: destroy, processing } = useForm();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleOpenCreate = () => {
     setSelectedBrand(null);
@@ -65,15 +44,34 @@ export default function Brands() {
   };
 
   const confirmDelete = () => {
-    if (brandToDelete) {
-      // If using backend integration, replace this with: destroy(route('brands.destroy', brandToDelete.id))
-      setBrands(brands.filter(b => b.id !== brandToDelete.id));
-      setIsDeleteModalOpen(false);
-      setBrandToDelete(null);
-    }
-  };
+      if (brandToDelete) {
+        // 1. Wrap the router.delete request in a native Promise
+        const deletePromise = new Promise((resolve, reject) => {
+          router.delete(route('brands.destroy', brandToDelete.id), {
+            onStart: () => setIsDeleting(true),
+            onSuccess: () => {
+              setIsDeleteModalOpen(false);
+              setBrandToDelete(null);
+              // Resolve with data that can be used in success message
+              setTimeout (() => resolve({ name: brandToDelete.name }), 500);
+            },
+            onError: (errors) => {
+              reject(errors);
+            },
+            onFinish: () => setIsDeleting(false),
+          });
+        });
+  
+        // 2. Pass the promise into Sonner's toast.promise
+        toast.promise(deletePromise, {
+          loading: 'Deleting brand...',
+          success: (data) => `Brand "${data.name}" successfully deleted.`,
+          error: 'Failed to delete brand.',
+        });
+      }
+    };
 
-  const filteredBrands = brands.filter(brand => 
+  const filteredBrands = brand.filter(brand => 
     brand.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -193,6 +191,8 @@ export default function Brands() {
             onClose={() => setIsModalOpen(false)}
             mode={modalMode}
             initialData={selectedBrand}
+            onSuccessCreate={() => toast.success('Brand successfully created.')}
+            onSuccessUpdate={() => toast.success('Brand successflly updated.')}
         />
 
         {/* Custom Delete Confirmation Modal */}
@@ -219,11 +219,11 @@ export default function Brands() {
                   </button>
                   <button
                     type="button"
-                    disabled={processing}
+                    disabled={isDeleting}
                     onClick={confirmDelete}
                     className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-50"
                   >
-                    {processing ? 'Deleting...' : 'Yes, Delete'}
+                    {isDeleting ? 'Deleting...' : 'Yes, Delete'}
                   </button>
                 </div>
               </div>

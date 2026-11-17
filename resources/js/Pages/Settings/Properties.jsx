@@ -1,17 +1,23 @@
 import React, { useState } from 'react';
 import { 
   Building2, Search, Plus, MapPin, 
-  Edit3, Trash2, CheckCircle2 
+  Edit3, AlertTriangle , Trash2, CheckCircle2 
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import { PropertyModal } from '@/Components/Modals/PropertyModal';
+import { toast } from 'sonner';
 
 export default function Properties({ properties = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit'
+
+// Delete Confirmation Modal States
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [propertyToDelete, setUserToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleOpenCreate = () => {
     setSelectedProperty(null);
@@ -25,9 +31,36 @@ export default function Properties({ properties = [] }) {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (propertyId, propertyName) => {
-    if (confirm(`Are you sure you want to delete property "${propertyName}"? This may affect assigned users and local inventories.`)) {
-      router.delete(route('properties.destroy', propertyId));
+  const handleOpenDelete = (property) => {
+    setUserToDelete(property);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (propertyToDelete) {
+      // 1. Wrap the router.delete request in a native Promise
+      const deletePromise = new Promise((resolve, reject) => {
+        router.delete(route('properties.destroy', propertyToDelete.id), {
+          onStart: () => setIsDeleting(true),
+          onSuccess: () => {
+            setIsDeleteModalOpen(false);
+            setUserToDelete(null);
+            // Resolve with data that can be used in success message
+            setTimeout (() => resolve({ name: propertyToDelete.name }), 500);
+          },
+          onError: (errors) => {
+            reject(errors);
+          },
+          onFinish: () => setIsDeleting(false),
+        });
+      });
+
+      // 2. Pass the promise into Sonner's toast.promise
+      toast.promise(deletePromise, {
+        loading: 'Deleting branch...',
+        success: (data) => `User "${data.name}" successfully deleted.`,
+        error: 'Failed to delete user.',
+      });
     }
   };
 
@@ -104,7 +137,7 @@ export default function Properties({ properties = [] }) {
                           <Edit3 className="w-4 h-4" />
                         </button>
                         <button 
-                          onClick={() => handleDelete(property.id, property.name)}
+                          onClick={() => handleOpenDelete(property) }
                           title="Delete Property" 
                           className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition"
                         >
@@ -131,7 +164,45 @@ export default function Properties({ properties = [] }) {
           onClose={() => setIsModalOpen(false)}
           mode={modalMode}
           property={selectedProperty}
+          onSuccessCreate={() => toast.success('User successfully created.')}
+          onSuccessUpdate={() => toast.success('User successfully updated.')}
         />
+
+        {/* Custom Delete Confirmation Modal */}
+                {isDeleteModalOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                      <div className="p-6 text-center space-y-4">
+                        <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+                          <AlertTriangle className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">Delete Role</h3>
+                          <p className="text-sm text-slate-500 mt-1">
+                            Are you sure you want to remove <span className="font-semibold text-slate-700">"{propertyToDelete?.name}"</span>? This action cannot be undone.
+                          </p>
+                        </div>
+                        <div className="flex justify-center gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsDeleteModalOpen(false)}
+                            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isDeleting}
+                            onClick={confirmDelete}
+                            className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-50"
+                          >
+                            {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
       </div>
     </AuthenticatedLayout>
