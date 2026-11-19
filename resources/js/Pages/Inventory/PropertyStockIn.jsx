@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
-import { StockInModal } from '@/Components/Modals/StockInModal';
+import { PropertyStockInModal } from '@/Components/Modals/PropertyStockInModal';
 
 export default function PropertyStockIn({ stockIns = [], properties = [], items = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -154,7 +154,7 @@ export default function PropertyStockIn({ stockIns = [], properties = [], items 
         </div>
 
         {/* Modal Component for Create & View */}
-        <StockInModal 
+        <PropertyStockInModal 
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
             mode={modalMode}

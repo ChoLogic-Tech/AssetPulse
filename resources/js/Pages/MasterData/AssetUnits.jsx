@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
-import { 
-  Plus, Search, Tag, Building2, Eye, ShieldCheck, 
-  Cpu, MapPin, Wrench, CheckCircle2, AlertCircle
+import {
+  Plus, Search, Tag, Building2, Eye,
+  Cpu, MapPin
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import { AssetUnitModal } from '@/Components/Modals/AssetUnitModal';
 
-export default function AssetUnits({ assetUnits = [], properties = [], items = [], locations = [] }) {
+export default function AssetUnits({
+  assetUnits = [],
+  properties = [],
+  items = [],
+  locations = [],
+  suppliers = [],
+}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPropertyFilter, setSelectedPropertyFilter] = useState('');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('');
@@ -27,18 +33,22 @@ export default function AssetUnits({ assetUnits = [], properties = [], items = [
     setIsModalOpen(true);
   };
 
-  const filteredAssets = assetUnits.filter(record => {
-    const matchesSearch = 
-      record.serial_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      record.item_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      record.sku?.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredAssets = assetUnits.filter((record) => {
+    const query = searchQuery.toLowerCase();
+    const matchesSearch =
+      record.serial_number?.toLowerCase().includes(query) ||
+      record.item_name?.toLowerCase().includes(query) ||
+      record.sku?.toLowerCase().includes(query);
 
-    const matchesProperty = selectedPropertyFilter 
-      ? String(record.property_id) === String(selectedPropertyFilter) 
+    const matchesProperty = selectedPropertyFilter
+      ? selectedPropertyFilter === 'warehouse'
+        ? record.property_id == null
+        : String(record.property_id) === String(selectedPropertyFilter)
       : true;
 
-    const matchesStatus = selectedStatusFilter 
-      ? record.status === selectedStatusFilter 
+    const statusValue = record.status ?? record.asset_status;
+    const matchesStatus = selectedStatusFilter
+      ? statusValue === selectedStatusFilter
       : true;
 
     return matchesSearch && matchesProperty && matchesStatus;
@@ -60,10 +70,9 @@ export default function AssetUnits({ assetUnits = [], properties = [], items = [
   };
 
   return (
-    <AuthenticatedLayout pageTitle={["Master Data", "Serialized Asset Units"]}>
+    <AuthenticatedLayout pageTitle={['Master Data', 'Serialized Asset Units']}>
       <Head title="Asset Units Directory" />
       <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-        
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -75,7 +84,8 @@ export default function AssetUnits({ assetUnits = [], properties = [], items = [
               Track physical individual hardware units, serial numbers, custody, and deployment lifecycle.
             </p>
           </div>
-          <button 
+          <button
+            type="button"
             onClick={handleOpenCreate}
             className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-lg shadow-sm transition"
           >
@@ -96,18 +106,23 @@ export default function AssetUnits({ assetUnits = [], properties = [], items = [
               className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
             />
           </div>
-          
+
           <div className="flex items-center gap-2 w-full md:w-auto">
-            <select 
+            <select
               value={selectedPropertyFilter}
               onChange={(e) => setSelectedPropertyFilter(e.target.value)}
               className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 bg-white outline-none focus:border-indigo-600"
             >
               <option value="">All Locations / Properties</option>
-              {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              <option value="warehouse">Central Warehouse</option>
+              {properties.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
             </select>
 
-            <select 
+            <select
               value={selectedStatusFilter}
               onChange={(e) => setSelectedStatusFilter(e.target.value)}
               className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 bg-white outline-none focus:border-indigo-600"
@@ -137,52 +152,65 @@ export default function AssetUnits({ assetUnits = [], properties = [], items = [
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {filteredAssets.length > 0 ? (
-                  filteredAssets.map((asset) => (
-                    <tr key={asset.id} className="hover:bg-slate-50/80 transition">
-                      <td className="py-3.5 px-4">
-                        <div className="font-mono font-bold text-slate-900">{asset.serial_number}</div>
-                        <div className="text-xs text-slate-400 font-mono flex items-center gap-1 mt-0.5">
-                          <Tag className="w-3 h-3" />
-                          {asset.sku}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-900">{asset.item_name}</div>
-                        <div className="text-xs text-slate-500">
-                          {asset.brand_name} {asset.model_name ? `• ${asset.model_name}` : ''}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="font-medium text-slate-800 flex items-center gap-1.5">
-                          <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                          {asset.property_name || 'Central Warehouse'}
-                        </div>
-                        {asset.location_name && (
-                          <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                            <MapPin className="w-3 h-3" />
-                            {asset.location_name}
+                  filteredAssets.map((asset) => {
+                    const statusValue = asset.status ?? asset.asset_status ?? 'Available';
+                    const brandValue = asset.brand_name ?? asset.brand;
+                    const modelValue = asset.model_name ?? asset.model;
+                    const propertyValue = asset.property_name ?? asset.current_property ?? 'Central Warehouse';
+                    const locationValue = asset.location_name ?? asset.room_location;
+
+                    return (
+                      <tr key={asset.id ?? asset.asset_id} className="hover:bg-slate-50/80 transition">
+                        <td className="py-3.5 px-4">
+                          <div className="font-mono font-bold text-slate-900">{asset.serial_number}</div>
+                          <div className="text-xs text-slate-400 font-mono flex items-center gap-1 mt-0.5">
+                            <Tag className="w-3 h-3" />
+                            {asset.sku}
                           </div>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadge(asset.status)}`}>
-                          {asset.status}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-slate-400">
-                        {asset.date_received}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <button 
-                          onClick={() => handleOpenView(asset)}
-                          title="View Asset Details" 
-                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-900">{asset.item_name}</div>
+                          <div className="text-xs text-slate-500">
+                            {brandValue} {modelValue ? `• ${modelValue}` : ''}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-medium text-slate-800 flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                            {propertyValue}
+                          </div>
+                          {locationValue && (
+                            <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                              <MapPin className="w-3 h-3" />
+                              {locationValue}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadge(
+                              statusValue
+                            )}`}
+                          >
+                            {statusValue}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-xs text-slate-400">
+                          {asset.date_received}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenView(asset)}
+                            title="View Asset Details"
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="6" className="py-8 text-center text-slate-400 text-sm">
@@ -195,8 +223,7 @@ export default function AssetUnits({ assetUnits = [], properties = [], items = [
           </div>
         </div>
 
-        {/* Asset Modal */}
-        <AssetUnitModal 
+        <AssetUnitModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           mode={modalMode}
@@ -204,6 +231,7 @@ export default function AssetUnits({ assetUnits = [], properties = [], items = [
           items={items}
           properties={properties}
           locations={locations}
+          suppliers={suppliers}
         />
       </div>
     </AuthenticatedLayout>

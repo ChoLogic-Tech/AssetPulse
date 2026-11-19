@@ -84,7 +84,8 @@ export default function Warehouse({ mainInventory = [], categories = [] }) {
               <thead className="bg-slate-100 text-slate-600 uppercase text-xs font-semibold tracking-wider border-b border-slate-200">
                 <tr>
                   <th className="py-3.5 px-4">Item Details (Masterlist)</th>
-                  <th className="py-3.5 px-4">RF Reference</th>
+                  <th className="py-3.5 px-4">Previous RF #</th>
+                  <th className="py-3.5 px-4">RF #</th>
                   <th className="py-3.5 px-4">Total Stock-In</th>
                   <th className="py-3.5 px-4">Total Dispatched</th>
                   <th className="py-3.5 px-4">Current Warehouse Stock</th>
@@ -106,6 +107,9 @@ export default function Warehouse({ mainInventory = [], categories = [] }) {
                             <Tag className="w-3 h-3" />
                             {record.sku}
                           </div>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-xs text-slate-600">
+                          {record.prf_num || 'N/A'}
                         </td>
                         <td className="py-3.5 px-4 font-mono text-xs text-slate-600">
                           {record.rf_num || 'N/A'}

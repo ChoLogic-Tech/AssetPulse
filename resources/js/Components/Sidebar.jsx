@@ -3,7 +3,7 @@ import { BiChevronLeftCircle, BiChevronDown } from "react-icons/bi";
 import { Search, LayoutDashboard, Boxes, ClipboardList, ChartColumnBig,
     Database, History, Settings, Warehouse, ListCheck, ShelvingUnit, Layers,
     Tag, UserGroup, Component, Truck, UserShield, BuildingComplex, Plus,  
-    Eye} from 'lucide-react';
+    Eye, MapPin } from 'lucide-react';
 import { Link, usePage } from "@inertiajs/react";
 import logo from "../img/logo.png";
 
@@ -77,7 +77,8 @@ export default function Sidebar() {
                 { title: "Categories", icon: Layers, href: "/master-data/categories" },
                 { title: "Brands", icon: Tag, href: "/master-data/brands" },
                 { title: "Models", icon: Component, href: "/master-data/models" },
-                { title: "Vendors & Suppliers", icon: Truck, href: "/master-data/vendors" }
+                { title: "Vendors & Suppliers", icon: Truck, href: "/master-data/suppliers" },
+                { title: "Locations", icon: MapPin, href: '/master-data/locations'}
             ]
         },
         { 

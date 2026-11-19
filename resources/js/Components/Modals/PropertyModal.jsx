@@ -1,19 +1,18 @@
-
 import React, { useEffect } from 'react';
 import { X, Building2, Edit3, CheckCircle2 } from 'lucide-react';
 import { useForm } from '@inertiajs/react';
 import { toast } from 'sonner';
 
-
 export function PropertyModal({ isOpen, onClose, mode = 'create', property = null }) {
-  if (!isOpen) return null;
   const isEdit = mode === 'edit';
 
-  const { data, setData, post, put, processing, errors, reset } = useForm({
-    name: property?.name || '',
+  const { data, setData, post, put, processing, errors, reset, clearErrors } = useForm({
+    name: '',
   });
 
   useEffect(() => {
+    if (!isOpen) return;
+    clearErrors();
     if (property && isEdit) {
       setData({
         name: property.name || '',
@@ -21,21 +20,24 @@ export function PropertyModal({ isOpen, onClose, mode = 'create', property = nul
     } else {
       reset();
     }
-  }, [property, mode]);
+  }, [isOpen, property, isEdit]);
+
+  if (!isOpen) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    const submittedName = data.name;
 
     if (mode === 'create') {
       const createPromise = new Promise((resolve, reject) => {
         post(route('properties.store'), {
           onSuccess: () => {
             onClose();
-            setTimeout (() => resolve({ name: data.name }), 500); // Pulls name directly from form state
             reset();
+            resolve({ name: submittedName });
           },
-          onError: (errors) => {
-            reject(errors);
+          onError: (err) => {
+            reject(err);
           },
         });
       });
@@ -45,16 +47,15 @@ export function PropertyModal({ isOpen, onClose, mode = 'create', property = nul
         success: (res) => `Branch "${res.name}" successfully created.`,
         error: 'Failed to create branch. Please check the form for errors.',
       });
-
     } else {
       const updatePromise = new Promise((resolve, reject) => {
         put(route('properties.update', property.id), {
           onSuccess: () => {
             onClose();
-            resolve({ name: data.name });
+            resolve({ name: submittedName });
           },
-          onError: (errors) => {
-            reject(errors);
+          onError: (err) => {
+            reject(err);
           },
         });
       });
@@ -70,15 +71,15 @@ export function PropertyModal({ isOpen, onClose, mode = 'create', property = nul
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden my-8 animate-in fade-in zoom-in duration-200">
-        
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
           <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
             {isEdit ? <Edit3 className="w-5 h-5 text-indigo-600" /> : <Building2 className="w-5 h-5 text-indigo-600" />}
             {isEdit ? 'Update Property Branch' : 'Register New Property'}
           </h3>
-          <button 
-            onClick={onClose} 
+          <button
+            type="button"
+            onClick={onClose}
             className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"
           >
             <X className="w-5 h-5" />
@@ -87,9 +88,10 @@ export function PropertyModal({ isOpen, onClose, mode = 'create', property = nul
 
         {/* Modal Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-sm">
-          
           <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Property / Branch Name *</label>
+            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+              Property / Branch Name *
+            </label>
             <input
               type="text"
               value={data.name}
@@ -120,7 +122,6 @@ export function PropertyModal({ isOpen, onClose, mode = 'create', property = nul
             </button>
           </div>
         </form>
-
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { CheckCircle2 } from 'lucide-react';
 import { useForm } from '@inertiajs/react';
 import { toast } from 'sonner';
 
@@ -15,6 +16,13 @@ export function CategoryModal({
 
   const isViewOnly = mode === 'view';
   const isEdit = mode === 'edit';
+
+  const inputClass = (hasError) =>
+    `w-full px-3 py-2 text-sm border rounded-lg outline-none disabled:bg-slate-50 disabled:text-slate-500 ${
+      hasError
+        ? 'border-red-500 focus:ring-2 focus:ring-red-500/20 focus:border-red-600'
+        : 'border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600'
+    }`;
 
   const { data, setData, post, put, processing, errors, reset } = useForm({
       name: initialData?.name,
@@ -36,6 +44,7 @@ export function CategoryModal({
       if (mode === 'create') {
         const createPromise = new Promise((resolve, reject) => {
           post(route('categories.store'), {
+            preserveScroll: true,
             onSuccess: () => {
               onClose();
               setTimeout (() => resolve({ name: data.name }), 500); // Pulls name directly from form state
@@ -50,7 +59,7 @@ export function CategoryModal({
         toast.promise(createPromise, {
           loading: 'Adding category...',
           success: (res) => `Category "${res.name}" successfully created.`,
-          error: 'Failed to create category. Please check the form for errors.',
+          error: (err) => err?.name || 'Failed to create category. Please check the form for errors.',
         });
   
       } else {
@@ -98,13 +107,13 @@ export function CategoryModal({
             <input
               type="text"
               disabled={isViewOnly}
+              name="category"
               placeholder="e.g. Networking, Computer Peripherals, etc."
-              value={data?.name}
-              onChange={(e) => setData('name', e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-              required
+              value={data?.category}
+              onChange={(e) => setData('category', e.target.value)}
+              className={inputClass(Boolean(errors.category))}
             />
-            {errors.name && <p className="text-xs text-rose-600 mt-1">{errors.name}</p>}
+            {errors.category && <p className="mt-1 text-xs text-red-600">{errors.category}</p>}
           </div>
 
           {/* Form Actions */}
@@ -120,8 +129,9 @@ export function CategoryModal({
               <button
                 type="submit"
                 disabled={processing}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition disabled:opacity-50"
               >
+                <CheckCircle2 className="w-4 h-4" />
                 {processing 
                   ? (mode === 'create' ? 'Creating...' : 'Saving...') 
                   : (mode === 'create' ? 'Create Category' : 'Save Changes')

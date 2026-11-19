@@ -11,6 +11,7 @@ use Inertia\Inertia;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ItemMasterController;
+use App\Http\Controllers\SupplierController;
 
 // 1. Root redirect based on auth status
 Route::get('/', function () {
@@ -121,9 +122,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/models', [ModelController::class, 'index'])->name('models.index');
 
         // Vendors & Suppliers
-        Route::get('/vendors', function () {
-            return Inertia::render('MasterData/Vendors');
-        })->name('vendors');
+        Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+
+        // Locations
+        Route::get('/locations', function () {
+            return Inertia::render('MasterData/Locations');
+        })->name('locations');
     });
 
     // ==========================================
@@ -209,6 +213,17 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/', [ModelController::class, 'store'])->name('store');
     Route::put('/models/{model}', [ModelController::class, 'update'])->name('update');
     Route::delete('/models/{model}', [ModelController::class, 'destroy'])->name('destroy');
+    });
+
+    // ==========================================
+    // INSERT DATA IN DATABASE MANAGEMENT
+    // ==========================================
+    // Suppliers
+    Route::prefix('suppliers')->name('suppliers.')->group(function () {
+    Route::get('/', [SupplierController::class, 'index'])->name('index');
+    Route::post('/', [SupplierController::class, 'store'])->name('store');
+    Route::put('/{suppliers}', [SupplierController::class, 'update'])->name('update');
+    Route::delete('/{supplier}', [SupplierController::class, 'destroy'])->name('destroy');
     });
 
     // ==========================================
