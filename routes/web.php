@@ -15,6 +15,7 @@ use App\Http\Controllers\ItemMasterController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\SkuController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\UomController;
 
 // 1. Root redirect based on auth status
 Route::get('/', function () {
@@ -116,6 +117,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // SKUs
         Route::get('/skus', [SkuController::class, 'index'])->name('skus.index');
 
+        // Unit of Measures
+        Route::get('/unitofmeasures', [UomController::class, 'index'])->name('unitofmeasures.index');
+
         // Categories
         Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
 
@@ -198,6 +202,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ==========================================
     // INSERT DATA IN DATABASE MANAGEMENT
     // ==========================================
+    // Unit of Measures
+    Route::prefix('unitofmeasures')->name('unitofmeasures.')->group(function () {
+    Route::get('/', [UomController::class, 'index'])->name('index');
+    Route::post('/', [UomController::class, 'store'])->name('store');
+    Route::put('/{unitofmeasure}', [UomController::class, 'update'])->name('update');
+    Route::delete('/{unitofmeasure}', [UomController::class, 'destroy'])->name('destroy');
+    });
+
+    // ==========================================
+    // INSERT DATA IN DATABASE MANAGEMENT
+    // ==========================================
     // Category
     Route::prefix('categories')->name('categories.')->group(function () {
     Route::get('/', [CategoryController::class, 'index'])->name('index');
@@ -224,8 +239,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('models')->name('models.')->group(function () {
     Route::get('/', [ModelController::class, 'index'])->name('index');
     Route::post('/', [ModelController::class, 'store'])->name('store');
-    Route::put('/models/{model}', [ModelController::class, 'update'])->name('update');
-    Route::delete('/models/{model}', [ModelController::class, 'destroy'])->name('destroy');
+    Route::put('/{model}', [ModelController::class, 'update'])->name('update');
+    Route::delete('/{model}', [ModelController::class, 'destroy'])->name('destroy');
     });
 
     // ==========================================
@@ -236,7 +251,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/', [SupplierController::class, 'index'])->name('index');
     Route::post('/', [SupplierController::class, 'store'])->name('store');
     Route::put('/{suppliers}', [SupplierController::class, 'update'])->name('update');
-    Route::delete('/{supplier}', [SupplierController::class, 'destroy'])->name('destroy');
+    Route::delete('/{suppliers}', [SupplierController::class, 'destroy'])->name('destroy');
     });
 
     // ==========================================

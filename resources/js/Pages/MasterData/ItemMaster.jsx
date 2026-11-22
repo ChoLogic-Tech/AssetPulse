@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Plus, Search, Edit2, Trash2, Eye,
-  Package, Tag, AlertTriangle, ChevronLeft, ChevronRight
+  Package, Tag, AlertTriangle, ChevronLeft, ChevronRight,
+  ChevronDown, Check
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
@@ -24,7 +25,147 @@ function getPageNumbers(currentPage, totalPages) {
   return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
 }
 
-export default function ItemMaster({ item = [], skus = [], categories = [], brands = [], models = [] }) {
+function ScrollableFilterDropdown({
+  value,
+  onChange,
+  options = [],
+  allLabel = 'All Options',
+  searchPlaceholder = 'Type to filter...',
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const dropdownRef = useRef(null);
+  const searchInputRef = useRef(null);
+
+  const optionList = Array.isArray(options) ? options : [];
+  const selectedOption = optionList.find((opt) => String(opt.id) === String(value));
+
+  const filteredOptions = optionList.filter((opt) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return String(opt.name ?? '').toLowerCase().includes(q);
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleOutsideClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+        setQuery('');
+      }
+    };
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+        setQuery('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+
+    const focusTimer = setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 10);
+
+    return () => {
+      clearTimeout(focusTimer);
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen]);
+
+  const handleSelect = (nextValue) => {
+    onChange(nextValue);
+    setIsOpen(false);
+    setQuery('');
+  };
+
+  return (
+    <div ref={dropdownRef} className="relative min-w-[165px]">
+      <button
+        type="button"
+        onClick={() =>
+          setIsOpen((prev) => {
+            const next = !prev;
+            if (!next) setQuery('');
+            return next;
+          })
+        }
+        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-700 bg-white hover:border-slate-300 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 flex items-center justify-between gap-2 transition"
+      >
+        <span className="truncate font-medium text-slate-600">
+          {selectedOption ? selectedOption.name : allLabel}
+        </span>
+        <ChevronDown
+          className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-150 ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 sm:left-0 mt-1.5 w-60 z-30 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+          <div className="p-2 border-b border-slate-100 bg-slate-50/70">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+              />
+            </div>
+          </div>
+
+          <div className="max-h-56 overflow-y-auto divide-y divide-slate-50">
+            <button
+              type="button"
+              onClick={() => handleSelect('')}
+              className={`w-full px-3 py-2 text-xs text-left flex items-center justify-between hover:bg-slate-50 transition ${
+                String(value ?? '') === ''
+                  ? 'text-indigo-600 font-semibold bg-indigo-50/50'
+                  : 'text-slate-600'
+              }`}
+            >
+              <span>{allLabel}</span>
+              {String(value ?? '') === '' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+            </button>
+
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((opt) => {
+                const isSelected = String(opt.id) === String(value);
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => handleSelect(opt.id)}
+                    className={`w-full px-3 py-2 text-sm text-left flex items-center justify-between gap-2 hover:bg-slate-50 transition ${
+                      isSelected ? 'bg-indigo-50/60 text-indigo-700 font-medium' : 'text-slate-700'
+                    }`}
+                  >
+                    <span className="truncate">{opt.name}</span>
+                    {isSelected && <Check className="w-4 h-4 text-indigo-600 shrink-0" />}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="px-3 py-4 text-xs text-slate-400 text-center">
+                No matching options found.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function ItemMaster({ item = [], unitofmeasures =[], skus = [], categories = [], brands = [], models = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
@@ -45,13 +186,20 @@ export default function ItemMaster({ item = [], skus = [], categories = [], bran
     setCurrentPage(1);
   };
 
-  const handleCategoryChange = (e) => {
-    setSelectedCategory(e.target.value);
+  const handleCategoryChange = (nextCategory) => {
+    setSelectedCategory(nextCategory);
     setCurrentPage(1);
   };
 
-  const handleBrandChange = (e) => {
-    setSelectedBrand(e.target.value);
+  const handleBrandChange = (nextBrand) => {
+    setSelectedBrand(nextBrand);
+    setCurrentPage(1);
+  };
+
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setSelectedCategory('');
+    setSelectedBrand('');
     setCurrentPage(1);
   };
 
@@ -151,6 +299,9 @@ export default function ItemMaster({ item = [], skus = [], categories = [], bran
   const paginatedItems = filteredItems.slice(startIndex, endIndex);
   const pageNumbers = getPageNumbers(currentPage, totalPages);
 
+  const hasActiveFilters =
+    normalizedQuery.length > 0 || selectedCategory !== '' || selectedBrand !== '';
+
   return (
     <AuthenticatedLayout pageTitle={['Master Data', 'Item Master']}>
       <Head title="Item Master" />
@@ -177,7 +328,7 @@ export default function ItemMaster({ item = [], skus = [], categories = [], bran
         </div>
 
         {/* Filter and Search Bar */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col md:flex-row gap-3 justify-between items-center shadow-sm">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col md:flex-row gap-3 justify-between items-center shadow-sm overflow-visible">
           <div className="relative w-full md:w-80">
             <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
             <input
@@ -190,33 +341,23 @@ export default function ItemMaster({ item = [], skus = [], categories = [], bran
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-between md:justify-end">
-            {/* Category Filter Dropdown */}
-            <select
+            {/* Scrollable Category Filter Dropdown */}
+            <ScrollableFilterDropdown
               value={selectedCategory}
               onChange={handleCategoryChange}
-              className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 bg-white outline-none focus:border-indigo-600"
-            >
-              <option value="">All Categories</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
+              options={categories}
+              allLabel="All Categories"
+              searchPlaceholder="Search category..."
+            />
 
-            {/* Brand Filter Dropdown */}
-            <select
+            {/* Scrollable Brand Filter Dropdown */}
+            <ScrollableFilterDropdown
               value={selectedBrand}
               onChange={handleBrandChange}
-              className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 bg-white outline-none focus:border-indigo-600"
-            >
-              <option value="">All Brands</option>
-              {brands.map((brand) => (
-                <option key={brand.id} value={brand.id}>
-                  {brand.name}
-                </option>
-              ))}
-            </select>
+              options={brands}
+              allLabel="All Brands"
+              searchPlaceholder="Search brand..."
+            />
 
             <label className="inline-flex items-center gap-2 text-sm text-slate-500 font-medium pl-1">
               <span>Show</span>
@@ -321,7 +462,20 @@ export default function ItemMaster({ item = [], skus = [], categories = [], bran
                 ) : (
                   <tr>
                     <td colSpan="7" className="text-center py-8 text-slate-400 text-sm">
-                      No items found matching your filters.
+                      <div>
+                        {hasActiveFilters
+                          ? 'No items found matching your filters.'
+                          : 'No items found. Click "+ Add New Master Item" to create one.'}
+                      </div>
+                      {hasActiveFilters && (
+                        <button
+                          type="button"
+                          onClick={handleResetFilters}
+                          className="mt-2 inline-flex items-center px-3 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition"
+                        >
+                          Reset filters
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )}
@@ -394,6 +548,7 @@ export default function ItemMaster({ item = [], skus = [], categories = [], bran
           mode={modalMode}
           initialData={selectedItem}
           skus={skus}
+          unitofmeasures={unitofmeasures}
           categories={categories}
           brands={brands}
           models={models}

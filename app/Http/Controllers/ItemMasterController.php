@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Brand;
 use App\Models\Models;
 use App\Models\Sku;
+use App\Models\UnitOfMeasure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -20,6 +21,7 @@ class ItemMasterController extends Controller
         return Inertia::render('MasterData/ItemMaster', [
             'item' => $item,
             'skus' => Sku::orderBy('sku_code', 'ASC')->get(),
+            'unitofmeasures' => UnitOfMeasure::orderBy('name', 'ASC')->get(),
             'categories' => Category::orderBy('name', 'ASC')->get(),
             'brands' => Brand::orderBy('name', 'ASC')->get(),
             'models' => Models::orderBy('name', 'ASC')->get(),

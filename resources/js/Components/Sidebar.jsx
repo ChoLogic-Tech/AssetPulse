@@ -4,7 +4,8 @@ import { Search, LayoutDashboard, Boxes, ClipboardList, ChartColumnBig,
     Database, History, Settings, Warehouse, ListCheck, ShelvingUnit, Layers,
     Tag, UserGroup, Component, Truck, UserShield, BuildingComplex, Plus,  
     Eye, MapPin, 
-    Barcode} from 'lucide-react';
+    Barcode,
+    Tags} from 'lucide-react';
 import { Link, usePage } from "@inertiajs/react";
 import logo from "../img/logo.png";
 
@@ -76,6 +77,7 @@ export default function Sidebar() {
                 { title: "Item Masterlists", icon: ListCheck, href: "/master-data/itemmaster" },
                 { title: "Asset Units", icon: ShelvingUnit, href: "/master-data/asset-units" },
                 { title: "SKUs", icon: Barcode, href: "/master-data/skus"},
+                { title: "Unit of Measures", icon: Tags, href: "/master-data/unitofmeasures"},
                 { title: "Categories", icon: Layers, href: "/master-data/categories" },
                 { title: "Brands", icon: Tag, href: "/master-data/brands" },
                 { title: "Models", icon: Component, href: "/master-data/models" },

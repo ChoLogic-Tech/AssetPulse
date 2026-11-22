@@ -1,7 +1,156 @@
-import React, { useEffect } from 'react';
-import { X, MapPin, Edit3, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, MapPin, Edit3, CheckCircle2, ChevronDown, Check, Search } from 'lucide-react';
 import { useForm } from '@inertiajs/react';
 import { toast } from 'sonner';
+
+function ScrollablePropertyDropdown({
+  value,
+  onChange,
+  options = [],
+  disabled = false,
+  hasError = false,
+  allowUnassigned = true,
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const dropdownRef = useRef(null);
+  const searchInputRef = useRef(null);
+
+  const propertyList = Array.isArray(options) ? options : [];
+  const selectedProperty = propertyList.find((p) => String(p.id) === String(value));
+
+  const filteredProperties = propertyList.filter((p) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return String(p.name ?? '').toLowerCase().includes(q);
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleOutsideClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+        setQuery('');
+      }
+    };
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+        setQuery('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+
+    const focusTimer = setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 10);
+
+    return () => {
+      clearTimeout(focusTimer);
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen]);
+
+  const handleSelect = (nextVal) => {
+    onChange(nextVal);
+    setIsOpen(false);
+    setQuery('');
+  };
+
+  if (disabled) {
+    return (
+      <div className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-100 text-slate-600 cursor-not-allowed">
+        {selectedProperty?.name || 'Assigned Property'}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className={`w-full px-3 py-2 text-sm text-left border rounded-lg flex items-center justify-between gap-2 outline-none transition bg-white ${
+          hasError
+            ? 'border-red-500 focus:ring-2 focus:ring-red-500/20'
+            : 'border-slate-200 hover:border-slate-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600'
+        }`}
+      >
+        <span className={`truncate ${!selectedProperty ? 'text-slate-600 font-medium' : 'text-slate-800 font-medium'}`}>
+          {selectedProperty ? selectedProperty.name : 'Central / Unassigned'}
+        </span>
+        <ChevronDown
+          className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-150 ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 mt-1.5 z-30 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+          <div className="p-2 border-b border-slate-100 bg-slate-50/70">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search property or branch..."
+                className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+              />
+            </div>
+          </div>
+
+          <div className="max-h-48 overflow-y-auto divide-y divide-slate-50">
+            {allowUnassigned && (
+              <button
+                type="button"
+                onClick={() => handleSelect('')}
+                className={`w-full px-3 py-2 text-xs text-left flex items-center justify-between hover:bg-slate-50 transition ${
+                  String(value ?? '') === ''
+                    ? 'text-indigo-600 font-semibold bg-indigo-50/50'
+                    : 'text-slate-500'
+                }`}
+              >
+                <span>Central / Unassigned</span>
+                {String(value ?? '') === '' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+              </button>
+            )}
+
+            {filteredProperties.length > 0 ? (
+              filteredProperties.map((prop) => {
+                const isSelected = String(prop.id) === String(value);
+                return (
+                  <button
+                    key={prop.id}
+                    type="button"
+                    onClick={() => handleSelect(prop.id)}
+                    className={`w-full px-3 py-2 text-sm text-left flex items-center justify-between gap-2 hover:bg-slate-50 transition ${
+                      isSelected ? 'bg-indigo-50/60 text-indigo-700 font-medium' : 'text-slate-700'
+                    }`}
+                  >
+                    <span className="truncate">{prop.name}</span>
+                    {isSelected && <Check className="w-4 h-4 text-indigo-600 shrink-0" />}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="px-3 py-4 text-xs text-slate-400 text-center">
+                No matching properties found.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function LocationModal({
   isOpen,
@@ -16,8 +165,8 @@ export function LocationModal({
   const isView = mode === 'view';
 
   const { data, setData, post, put, processing, errors, reset, clearErrors } = useForm({
-    name: initialData?.name,
-    property_id: initialData?.property_id
+    name: '',
+    property_id: '',
   });
 
   useEffect(() => {
@@ -32,65 +181,78 @@ export function LocationModal({
     } else {
       setData({
         name: '',
-        property_id: canSelectAnyProperty
-          ? (properties[0]?.id ?? '')
-          : (userPropertyId ?? ''),
+        property_id: canSelectAnyProperty ? '' : (userPropertyId ?? ''),
       });
     }
   }, [isOpen, mode, initialData, canSelectAnyProperty, userPropertyId]);
 
   if (!isOpen) return null;
 
+  const handleFieldChange = (field, value) => {
+    setData(field, value);
+    if (errors[field]) {
+      clearErrors(field);
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (isView || processing) return;
 
-    if(mode === 'create') {
+    const locationName = data.name.trim();
+
+    if (mode === 'create') {
       const createPromise = new Promise((resolve, reject) => {
         post(route('locations.store'), {
+          preserveScroll: true,
           onSuccess: () => {
-            onClose();
-            setTimeout(() => resolve({
-              name: data.name }), 500);
             reset();
+            onClose();
+            setTimeout(() => resolve({ name: locationName }), 500);
           },
-          onError: (errors) => {
-            reject(errors);
+          onError: (err) => {
+            reject(err);
           },
         });
       });
 
       toast.promise(createPromise, {
         loading: 'Adding location...',
-        success: (res) =>  `Location "${res.name}" successfully created.`,
+        success: (res) => `Location "${res.name}" successfully created.`,
         error: 'Failed to create location. Please check the form for errors.',
       });
-
     } else {
-          const updatePromise = new Promise((resolve, reject) => {
-            put(route('locations.update', initialData.id), {
-              onSuccess: () => {
-                onClose();
-                resolve({ name: data.name });
-              },
-              onError: (errors) => {
-                reject(errors);
-              },
-            });
-          });
-    
-          toast.promise(updatePromise, {
-            loading: 'Updating location...',
-            success: (res) => `Location "${res.name}" successfully updated.`,
-            error: 'Failed to update item. Please check the form for errors.',
-          });
-        }
-    };
+      if (!initialData?.id) return;
+
+      const updatePromise = new Promise((resolve, reject) => {
+        put(route('locations.update', initialData.id), {
+          preserveScroll: true,
+          onSuccess: () => {
+            onClose();
+            resolve({ name: locationName });
+          },
+          onError: (err) => {
+            reject(err);
+          },
+        });
+      });
+
+      toast.promise(updatePromise, {
+        loading: 'Updating location...',
+        success: (res) => `Location "${res.name}" successfully updated.`,
+        error: 'Failed to update location. Please check the form for errors.',
+      });
+    }
+  };
+
+  const viewPropertyLabel =
+    initialData?.property?.name ?? initialData?.property_name ?? 'Central / Unassigned';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden my-8 animate-in fade-in zoom-in duration-200">
+      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-visible my-8 animate-in fade-in zoom-in duration-200">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl">
           <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
             {isEdit ? (
               <Edit3 className="w-5 h-5 text-indigo-600" />
@@ -116,13 +278,19 @@ export function LocationModal({
         {isView ? (
           <div className="p-6 space-y-4 text-sm text-slate-600">
             <div>
-              <span className="block text-xs text-slate-400 uppercase font-semibold">Location / Room Name</span>
-              <span className="font-semibold text-slate-900 text-base">{initialData?.name}</span>
+              <span className="block text-xs text-slate-400 uppercase font-semibold">
+                Location / Room Name
+              </span>
+              <span className="font-semibold text-slate-900 text-base">
+                {initialData?.name}
+              </span>
             </div>
             <div>
-              <span className="block text-xs text-slate-400 uppercase font-semibold">Property / Branch</span>
+              <span className="block text-xs text-slate-400 uppercase font-semibold">
+                Property / Branch
+              </span>
               <span className="font-medium text-slate-800">
-                {initialData?.property_name || 'Central / Unassigned'}
+                {viewPropertyLabel}
               </span>
             </div>
             <div className="pt-4 border-t border-slate-100 flex justify-end">
@@ -136,28 +304,22 @@ export function LocationModal({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="p-6 space-y-4 text-sm">
+          <form onSubmit={handleSubmit} className="p-6 space-y-4 text-sm" noValidate>
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
-                Property / Branch *
+                Property / Branch
               </label>
-              <select
+              <ScrollablePropertyDropdown
                 value={data.property_id}
-                onChange={(e) => setData('property_id', e.target.value)}
+                onChange={(val) => handleFieldChange('property_id', val)}
+                options={properties}
                 disabled={!canSelectAnyProperty}
-                className={`w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-indigo-600 bg-white ${
-                  !canSelectAnyProperty ? 'bg-slate-100 text-slate-600 cursor-not-allowed' : ''
-                }`}
-                required={canSelectAnyProperty}
-              >
-                {canSelectAnyProperty && <option value="">Central / Unassigned</option>}
-                {properties.map((prop) => (
-                  <option key={prop.id} value={prop.id}>
-                    {prop.name}
-                  </option>
-                ))}
-              </select>
-              {errors.property_id && <span className="text-xs text-rose-500 mt-1 block">{errors.property_id}</span>}
+                hasError={Boolean(errors.property_id)}
+                allowUnassigned={canSelectAnyProperty}
+              />
+              {errors.property_id && (
+                <span className="text-xs text-rose-500 mt-1 block">{errors.property_id}</span>
+              )}
             </div>
 
             <div>
@@ -167,12 +329,18 @@ export function LocationModal({
               <input
                 type="text"
                 value={data.name}
-                onChange={(e) => setData('name', e.target.value)}
+                onChange={(e) => handleFieldChange('name', e.target.value)}
                 placeholder="e.g. Server Room, North Perimeter Gate, Housekeeping Closet"
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-indigo-600"
+                className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition ${
+                  errors.name
+                    ? 'border-red-500 focus:ring-2 focus:ring-red-500/20'
+                    : 'border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600'
+                }`}
                 required
               />
-              {errors.name && <span className="text-xs text-rose-500 mt-1 block">{errors.name}</span>}
+              {errors.name && (
+                <span className="text-xs text-rose-500 mt-1 block">{errors.name}</span>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">

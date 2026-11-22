@@ -1,7 +1,175 @@
-import React, { useEffect, useRef } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Check, CheckCircle2, ChevronDown, Search } from 'lucide-react';
 import { useForm } from '@inertiajs/react';
 import { toast } from 'sonner';
+
+function ScrollableDropdown({
+  value,
+  onChange,
+  options = [],
+  getOptionValue = (item) => item.id,
+  getOptionLabel = (item) => item.name,
+  getOptionSubLabel = null,
+  placeholder = 'Select option',
+  searchPlaceholder = 'Type to filter...',
+  disabled = false,
+  hasError = false,
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef(null);
+  const searchInputRef = useRef(null);
+
+  const selectedOption = options.find(
+    (item) => String(getOptionValue(item)) === String(value)
+  );
+
+  const filteredOptions = options.filter((item) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    const label = String(getOptionLabel(item) ?? '').toLowerCase();
+    const subLabel = getOptionSubLabel
+      ? String(getOptionSubLabel(item) ?? '').toLowerCase()
+      : '';
+    return label.includes(q) || subLabel.includes(q);
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleOutsideClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+        setQuery('');
+      }
+    };
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+        setQuery('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+
+    const focusTimer = setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 10);
+
+    return () => {
+      clearTimeout(focusTimer);
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen]);
+
+  const handleToggle = () => {
+    if (disabled) return;
+    setIsOpen((prev) => {
+      const next = !prev;
+      if (!next) setQuery('');
+      return next;
+    });
+  };
+
+  const handleSelect = (nextVal) => {
+    onChange(nextVal);
+    setIsOpen(false);
+    setQuery('');
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={handleToggle}
+        className={`w-full px-3 py-2 text-sm text-left border rounded-lg flex items-center justify-between gap-2 outline-none transition ${
+          disabled
+            ? 'bg-slate-50 text-slate-500 border-slate-200 cursor-not-allowed'
+            : hasError
+            ? 'bg-white text-slate-800 border-red-500 focus:ring-2 focus:ring-red-500/20'
+            : 'bg-white text-slate-800 border-slate-200 hover:border-slate-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600'
+        }`}
+      >
+        <span className={`truncate ${!selectedOption ? 'text-slate-400' : 'font-medium'}`}>
+          {selectedOption ? getOptionLabel(selectedOption) : placeholder}
+        </span>
+        <ChevronDown
+          className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-150 ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {isOpen && !disabled && (
+        <div className="absolute left-0 right-0 mt-1.5 z-30 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+          {/* Search Input inside Dropdown */}
+          <div className="p-2 border-b border-slate-100 bg-slate-50/70">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+              />
+            </div>
+          </div>
+
+          {/* Scrollable Options List */}
+          <div className="max-h-56 overflow-y-auto divide-y divide-slate-50">
+            <button
+              type="button"
+              onClick={() => handleSelect('')}
+              className={`w-full px-3 py-2 text-xs text-left flex items-center justify-between hover:bg-slate-50 transition ${
+                String(value ?? '') === '' ? 'text-indigo-600 font-semibold bg-indigo-50/40' : 'text-slate-500'
+              }`}
+            >
+              <span>{placeholder}</span>
+              {String(value ?? '') === '' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+            </button>
+
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((item) => {
+                const optionVal = getOptionValue(item);
+                const isSelected = String(optionVal) === String(value);
+                const subLabel = getOptionSubLabel ? getOptionSubLabel(item) : null;
+
+                return (
+                  <button
+                    key={optionVal}
+                    type="button"
+                    onClick={() => handleSelect(optionVal)}
+                    className={`w-full px-3 py-2 text-sm text-left flex items-center justify-between gap-2 hover:bg-slate-50 transition ${
+                      isSelected ? 'bg-indigo-50/60 text-indigo-700 font-medium' : 'text-slate-700'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate">{getOptionLabel(item)}</div>
+                      {subLabel && (
+                        <div className="text-[11px] text-slate-400 truncate">{subLabel}</div>
+                      )}
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-indigo-600 shrink-0" />}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="px-3 py-4 text-xs text-slate-400 text-center">
+                No matching options found.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function ItemMasterModal({
   isOpen,
@@ -9,7 +177,7 @@ export function ItemMasterModal({
   mode = 'create',
   initialData = null,
   skus = [],
-  uoms = [],
+  unitofmeasures = [],
   categories = [],
   brands = [],
   models = [],
@@ -64,7 +232,7 @@ export function ItemMasterModal({
   if (!isOpen) return null;
 
   const skuList = Array.isArray(skus) ? skus : [];
-  const uomList = Array.isArray(uoms) ? uoms : [];
+  const uomList = Array.isArray(unitofmeasures) ? unitofmeasures : [];
   const categoryList = Array.isArray(categories) ? categories : [];
   const brandList = Array.isArray(brands) ? brands : [];
   const modelList = Array.isArray(models) ? models : [];
@@ -128,9 +296,9 @@ export function ItemMasterModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-xl overflow-hidden">
+      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-xl overflow-visible">
         {/* Modal Header */}
-        <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+        <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 rounded-t-xl flex justify-between items-center">
           <h3 className="font-semibold text-slate-800">
             {mode === 'create' && 'Add Master Item Catalog Record'}
             {isEdit && 'Edit Catalog Master Record'}
@@ -152,19 +320,17 @@ export function ItemMasterModal({
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
                 SKU (Stock Keeping Unit) *
               </label>
-              <select
+              <ScrollableDropdown
                 disabled={isViewOnly}
                 value={data.sku_id}
-                onChange={(e) => handleFieldChange('sku_id', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-              >
-                <option value="">Select SKU</option>
-                {skuList.map((skuItem) => (
-                  <option key={skuItem.id} value={skuItem.id}>
-                    {skuItem.sku_code}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => handleFieldChange('sku_id', val)}
+                options={skuList}
+                getOptionLabel={(skuItem) => skuItem.sku_code}
+                getOptionSubLabel={(skuItem) => skuItem.descriptions}
+                placeholder="Select SKU"
+                searchPlaceholder="Search SKU code or description..."
+                hasError={Boolean(errors.sku_id)}
+              />
               {errors.sku_id && (
                 <p className="text-xs text-red-500 mt-1">{errors.sku_id}</p>
               )}
@@ -174,19 +340,16 @@ export function ItemMasterModal({
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
                 Unit of Measure (UOM) *
               </label>
-              <select
+              <ScrollableDropdown
                 disabled={isViewOnly}
                 value={data.uom_id}
-                onChange={(e) => handleFieldChange('uom_id', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-              >
-                <option value="">Select UOM</option>
-                {uomList.map((uomItem) => (
-                  <option key={uomItem.id} value={uomItem.id}>
-                    {uomItem.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => handleFieldChange('uom_id', val)}
+                options={uomList}
+                getOptionLabel={(uomItem) => uomItem.name}
+                placeholder="Select UOM"
+                searchPlaceholder="Search UOM..."
+                hasError={Boolean(errors.uom_id)}
+              />
               {errors.uom_id && (
                 <p className="text-xs text-red-500 mt-1">{errors.uom_id}</p>
               )}
@@ -202,6 +365,7 @@ export function ItemMasterModal({
               disabled={isViewOnly}
               value={data.item_name}
               onChange={(e) => handleFieldChange('item_name', e.target.value)}
+              placeholder="Enter product name..."
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
             />
             {errors.item_name && (
@@ -215,19 +379,15 @@ export function ItemMasterModal({
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
                 Category
               </label>
-              <select
+              <ScrollableDropdown
                 disabled={isViewOnly}
                 value={data.category_id}
-                onChange={(e) => handleFieldChange('category_id', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-              >
-                <option value="">Select Category</option>
-                {categoryList.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => handleFieldChange('category_id', val)}
+                options={categoryList}
+                getOptionLabel={(category) => category.name}
+                placeholder="Select Category"
+                searchPlaceholder="Search category..."
+              />
             </div>
 
             {/* Brand Dropdown */}
@@ -235,19 +395,15 @@ export function ItemMasterModal({
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
                 Brand
               </label>
-              <select
+              <ScrollableDropdown
                 disabled={isViewOnly}
                 value={data.brand_id}
-                onChange={(e) => handleFieldChange('brand_id', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-              >
-                <option value="">Select Brand</option>
-                {brandList.map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => handleFieldChange('brand_id', val)}
+                options={brandList}
+                getOptionLabel={(brand) => brand.name}
+                placeholder="Select Brand"
+                searchPlaceholder="Search brand..."
+              />
             </div>
 
             {/* Model Dropdown */}
@@ -255,19 +411,15 @@ export function ItemMasterModal({
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
                 Model
               </label>
-              <select
+              <ScrollableDropdown
                 disabled={isViewOnly}
                 value={data.model_id}
-                onChange={(e) => handleFieldChange('model_id', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-              >
-                <option value="">Select Model</option>
-                {modelList.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => handleFieldChange('model_id', val)}
+                options={modelList}
+                getOptionLabel={(model) => model.name}
+                placeholder="Select Model"
+                searchPlaceholder="Search model..."
+              />
             </div>
           </div>
 
