@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\BrandController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ModelController;
 use App\Http\Controllers\PropertyController;
 use Illuminate\Support\Facades\Route;
@@ -11,6 +12,8 @@ use Inertia\Inertia;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ItemMasterController;
+use App\Http\Controllers\LocationController;
+use App\Http\Controllers\SkuController;
 use App\Http\Controllers\SupplierController;
 
 // 1. Root redirect based on auth status
@@ -46,12 +49,10 @@ Route::middleware('guest')->group(function () {
 });
 
 // 4. Protected Routes (Requires Authentication & Session Validation)
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'verified'])->group(function () {
     
     // Dashboard Route
-    Route::get('/dashboard', function () {
-        return Inertia::render('Dashboard');
-    })->name('dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // ==========================================
     // INVENTORY MODULE ROUTES
@@ -112,6 +113,9 @@ Route::middleware(['auth'])->group(function () {
             return Inertia::render('MasterData/AssetUnits');
         })->name('asset-units');
 
+        // SKUs
+        Route::get('/skus', [SkuController::class, 'index'])->name('skus.index');
+
         // Categories
         Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
 
@@ -125,9 +129,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
 
         // Locations
-        Route::get('/locations', function () {
-            return Inertia::render('MasterData/Locations');
-        })->name('locations');
+        Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
     });
 
     // ==========================================
@@ -185,6 +187,17 @@ Route::middleware(['auth'])->group(function () {
     // ==========================================
     // INSERT DATA IN DATABASE MANAGEMENT
     // ==========================================
+    // SKUs
+    Route::prefix('skus')->name('skus.')->group(function () {
+    Route::get('/', [SkuController::class, 'index'])->name('index');
+    Route::post('/', [SkuController::class, 'store'])->name('store');
+    Route::put('/{sku}', [SkuController::class, 'update'])->name('update');
+    Route::delete('/{sku}', [SkuController::class, 'destroy'])->name('destroy');
+    });
+
+    // ==========================================
+    // INSERT DATA IN DATABASE MANAGEMENT
+    // ==========================================
     // Category
     Route::prefix('categories')->name('categories.')->group(function () {
     Route::get('/', [CategoryController::class, 'index'])->name('index');
@@ -224,6 +237,17 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/', [SupplierController::class, 'store'])->name('store');
     Route::put('/{suppliers}', [SupplierController::class, 'update'])->name('update');
     Route::delete('/{supplier}', [SupplierController::class, 'destroy'])->name('destroy');
+    });
+
+    // ==========================================
+    // INSERT DATA IN DATABASE MANAGEMENT
+    // ==========================================
+    // Locations
+    Route::prefix('locations')->name('locations.')->group(function () {
+    Route::get('/', [LocationController::class, 'index'])->name('index');
+    Route::post('/', [LocationController::class, 'store'])->name('store');
+    Route::put('/{locations}', [LocationController::class, 'update'])->name('update');
+    Route::delete('/{locations}', [LocationController::class, 'destroy'])->name('destroy');
     });
 
     // ==========================================

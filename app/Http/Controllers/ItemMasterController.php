@@ -5,7 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\ItemMasterlist;
 use App\Models\Category;
 use App\Models\Brand;
-use App\Models\Models; 
+use App\Models\Models;
+use App\Models\Sku;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -14,10 +15,11 @@ class ItemMasterController extends Controller
 {
     public function index()
     {   
-        $item = ItemMasterlist::with('brand', 'model', 'category')->orderBy('item_name', 'ASC')->get();
+        $item = ItemMasterlist::with('brand', 'model', 'category', 'sku')->orderBy('item_name', 'ASC')->get();
 
         return Inertia::render('MasterData/ItemMaster', [
             'item' => $item,
+            'skus' => Sku::orderBy('sku_code', 'ASC')->get(),
             'categories' => Category::orderBy('name', 'ASC')->get(),
             'brands' => Brand::orderBy('name', 'ASC')->get(),
             'models' => Models::orderBy('name', 'ASC')->get(),

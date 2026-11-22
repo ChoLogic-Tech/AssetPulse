@@ -1,16 +1,34 @@
-import React, { useState } from 'react';
-import { 
-  Plus, Search, Edit2, Trash2, Eye, 
-  Tag, Layers, AlertTriangle 
+import React, { useEffect, useState } from 'react';
+import {
+  Plus, Search, Edit2, Trash2, Eye,
+  Tag, Layers, AlertTriangle, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm, router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { BrandModal } from '@/Components/Modals/BrandModal';
 import { toast } from 'sonner';
 
-export default function Brands( { brand = [] }) {
-  
+function getPageNumbers(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  if (currentPage <= 4) {
+    return [1, 2, 3, 4, 5, '...', totalPages];
+  }
+
+  if (currentPage >= totalPages - 3) {
+    return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+
+  return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+}
+
+export default function Brands({ brand = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit' | 'view'
@@ -20,179 +38,280 @@ export default function Brands( { brand = [] }) {
   const [brandToDelete, setBrandToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handlePerPageChange = (e) => {
+    setPerPage(Number(e.target.value));
+    setCurrentPage(1);
+  };
+
   const handleOpenCreate = () => {
     setSelectedBrand(null);
     setModalMode('create');
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (brand) => {
-    setSelectedBrand(brand);
+  const handleOpenEdit = (item) => {
+    setSelectedBrand(item);
     setModalMode('edit');
     setIsModalOpen(true);
   };
 
-  const handleOpenView = (brand) => {
-    setSelectedBrand(brand);
+  const handleOpenView = (item) => {
+    setSelectedBrand(item);
     setModalMode('view');
     setIsModalOpen(true);
   };
 
-  const handleOpenDelete = (brand) => {
-    setBrandToDelete(brand);
+  const handleOpenDelete = (item) => {
+    setBrandToDelete(item);
     setIsDeleteModalOpen(true);
   };
 
   const confirmDelete = () => {
-      if (brandToDelete) {
-        // 1. Wrap the router.delete request in a native Promise
-        const deletePromise = new Promise((resolve, reject) => {
-          router.delete(route('brands.destroy', brandToDelete.id), {
-            onStart: () => setIsDeleting(true),
-            onSuccess: () => {
-              setIsDeleteModalOpen(false);
-              setBrandToDelete(null);
-              // Resolve with data that can be used in success message
-              setTimeout (() => resolve({ name: brandToDelete.name }), 500);
-            },
-            onError: (errors) => {
-              reject(errors);
-            },
-            onFinish: () => setIsDeleting(false),
-          });
-        });
-  
-        // 2. Pass the promise into Sonner's toast.promise
-        toast.promise(deletePromise, {
-          loading: 'Deleting brand...',
-          success: (data) => `Brand "${data.name}" successfully deleted.`,
-          error: 'Failed to delete brand.',
-        });
-      }
-    };
+    if (!brandToDelete) return;
 
-  const filteredBrands = brand.filter(brand => 
-    brand.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const deletedName = brandToDelete.name;
+
+    const deletePromise = new Promise((resolve, reject) => {
+      router.delete(route('brands.destroy', brandToDelete.id), {
+        preserveScroll: true,
+        onStart: () => setIsDeleting(true),
+        onSuccess: () => {
+          setIsDeleteModalOpen(false);
+          setBrandToDelete(null);
+          resolve({ name: deletedName });
+        },
+        onError: (errors) => {
+          reject(errors);
+        },
+        onFinish: () => setIsDeleting(false),
+      });
+    });
+
+    toast.promise(deletePromise, {
+      loading: 'Deleting brand...',
+      success: (res) => `Brand "${res.name}" successfully deleted.`,
+      error: 'Failed to delete brand.',
+    });
+  };
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredBrands = (Array.isArray(brand) ? brand : []).filter((item) =>
+    item.name?.toLowerCase().includes(normalizedQuery)
   );
 
+  const totalItems = filteredBrands.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const startIndex = (currentPage - 1) * perPage;
+  const endIndex = Math.min(startIndex + perPage, totalItems);
+  const paginatedBrands = filteredBrands.slice(startIndex, endIndex);
+  const pageNumbers = getPageNumbers(currentPage, totalPages);
+
   return (
-    <AuthenticatedLayout pageTitle={["Master Data", "Brands"]}>
-        <Head title="Brands" />
-        <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
+    <AuthenticatedLayout pageTitle={['Master Data', 'Brands']}>
+      <Head title="Brands" />
+      <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
+          <div>
             <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                <Tag className="w-6 h-6 text-indigo-600" />
-                Brands Masterlist
+              <Tag className="w-6 h-6 text-indigo-600" />
+              Brands Masterlist
             </h1>
             <p className="text-sm text-slate-500">
-                Manage hardware manufacturers and brand definitions for asset cataloging.
+              Manage hardware manufacturers and brand definitions for asset cataloging.
             </p>
-            </div>
-            <button 
+          </div>
+          <button
+            type="button"
             onClick={handleOpenCreate}
             className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-lg shadow-sm transition"
-            >
+          >
             <Plus className="w-4 h-4" />
             Add New Brand
-            </button>
+          </button>
         </div>
 
         {/* Filter and Search Bar */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col md:flex-row gap-3 justify-between items-center shadow-sm">
-            <div className="relative w-full md:w-80">
+          <div className="relative w-full md:w-80">
             <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
             <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search brand name..."
-                className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+              type="text"
+              value={searchQuery}
+              onChange={handleSearchChange}
+              placeholder="Search brand name..."
+              className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
             />
+          </div>
+
+          <div className="flex items-center gap-4 text-sm text-slate-500 font-medium">
+            <label className="inline-flex items-center gap-2">
+              <span>Show</span>
+              <select
+                value={perPage}
+                onChange={handlePerPageChange}
+                className="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+              <span>entries</span>
+            </label>
+
+            <div>
+              Total Brands:{' '}
+              <span className="text-slate-800 font-bold">{totalItems}</span>
             </div>
-            
-            <div className="text-sm text-slate-500 font-medium">
-              Total Brands: <span className="text-slate-800 font-bold">{filteredBrands.length}</span>
-            </div>
+          </div>
         </div>
 
         {/* Brands Table */}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
+          <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-                <thead className="bg-slate-100 text-slate-600 uppercase text-xs font-semibold tracking-wider border-b border-slate-200">
+              <thead className="bg-slate-100 text-slate-600 uppercase text-xs font-semibold tracking-wider border-b border-slate-200">
                 <tr>
-                    <th className="py-3.5 px-4">Brand Name</th>
-                    <th className="py-3.5 px-4">Associated Items</th>
-                    <th className="py-3.5 px-4">Last Updated</th>
-                    <th className="py-3.5 px-4 text-right">Actions</th>
+                  <th className="py-3.5 px-4">Brand Name</th>
+                  <th className="py-3.5 px-4">Associated Items</th>
+                  <th className="py-3.5 px-4">Last Updated</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredBrands.length > 0 ? (
-                    filteredBrands.map((brand) => (
-                    <tr key={brand.id} className="hover:bg-slate-50/80 transition">
-                        <td className="py-3.5 px-4">
-                            <div className="font-semibold text-slate-900">{brand.name}</div>
-                            <div className="text-xs text-slate-400 font-mono">ID: #{brand.id}</div>
-                        </td>
-                        <td className="py-3.5 px-4">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                              <Layers className="w-3 h-3 text-slate-500" />
-                              {brand.items_count || 0} items
-                            </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-xs text-slate-400">
-                            {brand.updated_at}
-                        </td>
-                        <td className="py-3.5 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                            <button 
-                                onClick={() => handleOpenView(brand)}
-                                title="View Brand Details" 
-                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
-                            >
-                                <Eye className="w-4 h-4" />
-                            </button>
-                            <button 
-                                onClick={() => handleOpenEdit(brand)}
-                                title="Edit Brand Record" 
-                                className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition"
-                            >
-                                <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button 
-                                onClick={() => handleOpenDelete(brand)}
-                                title="Delete Brand" 
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition"
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                            </div>
-                        </td>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {paginatedBrands.length > 0 ? (
+                  paginatedBrands.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50/80 transition">
+                      <td className="py-3.5 px-4">
+                        <div className="font-semibold text-slate-900">{item.name}</div>
+                        <div className="text-xs text-slate-400 font-mono">ID: #{item.id}</div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                          <Layers className="w-3 h-3 text-slate-500" />
+                          {item.items_count || 0} items
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-xs text-slate-400">
+                        {item.updated_at}
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenView(item)}
+                            title="View Brand Details"
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(item)}
+                            title="Edit Brand Record"
+                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDelete(item)}
+                            title="Delete Brand"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
-                    ))
+                  ))
                 ) : (
-                    <tr>
-                        <td colSpan="4" className="py-8 text-center text-slate-400 text-sm">
-                            No brands found. Click "+ Add New Brand" to create one.
-                        </td>
-                    </tr>
+                  <tr>
+                    <td colSpan="4" className="py-8 text-center text-slate-400 text-sm">
+                      No brands found. Click "+ Add New Brand" to create one.
+                    </td>
+                  </tr>
                 )}
-                </tbody>
+              </tbody>
             </table>
+          </div>
+
+          {/* Pagination Footer */}
+          {totalItems > 0 && (
+            <div className="px-4 py-3 bg-slate-50/70 border-t border-slate-200 flex flex-col sm:flex-row gap-3 items-center justify-between text-xs text-slate-600">
+              <div>
+                Showing <span className="font-semibold text-slate-800">{startIndex + 1}</span> to{' '}
+                <span className="font-semibold text-slate-800">{endIndex}</span> of{' '}
+                <span className="font-semibold text-slate-800">{totalItems}</span> entries
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  Prev
+                </button>
+
+                {pageNumbers.map((page, index) =>
+                  page === '...' ? (
+                    <span
+                      key={`ellipsis-${index}`}
+                      className="px-2 py-1.5 text-slate-400 select-none"
+                    >
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => setCurrentPage(page)}
+                      className={`min-w-[32px] px-2.5 py-1.5 rounded-lg border font-medium transition ${
+                        currentPage === page
+                          ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm'
+                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+
+                <button
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition"
+                >
+                  Next
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
+          )}
         </div>
 
         {/* Brand Modal Component */}
-        <BrandModal 
-            isOpen={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
-            mode={modalMode}
-            initialData={selectedBrand}
-            onSuccessCreate={() => toast.success('Brand successfully created.')}
-            onSuccessUpdate={() => toast.success('Brand successflly updated.')}
+        <BrandModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          mode={modalMode}
+          initialData={selectedBrand}
         />
 
         {/* Custom Delete Confirmation Modal */}
@@ -206,7 +325,9 @@ export default function Brands( { brand = [] }) {
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">Delete Brand</h3>
                   <p className="text-sm text-slate-500 mt-1">
-                    Are you sure you want to remove <span className="font-semibold text-slate-700">"{brandToDelete?.name}"</span>? This action cannot be undone.
+                    Are you sure you want to remove{' '}
+                    <span className="font-semibold text-slate-700">"{brandToDelete?.name}"</span>?
+                    This action cannot be undone.
                   </p>
                 </div>
                 <div className="flex justify-center gap-2 pt-2">
@@ -230,8 +351,7 @@ export default function Brands( { brand = [] }) {
             </div>
           </div>
         )}
-
-        </div>
+      </div>
     </AuthenticatedLayout>
   );
 }

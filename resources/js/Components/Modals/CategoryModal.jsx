@@ -107,13 +107,12 @@ export function CategoryModal({
             <input
               type="text"
               disabled={isViewOnly}
-              name="category"
               placeholder="e.g. Networking, Computer Peripherals, etc."
-              value={data?.category}
-              onChange={(e) => setData('category', e.target.value)}
-              className={inputClass(Boolean(errors.category))}
+              value={data?.name}
+              onChange={(e) => setData('name', e.target.value)}
+              className={inputClass(Boolean(errors.name))}
             />
-            {errors.category && <p className="mt-1 text-xs text-red-600">{errors.category}</p>}
+            {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name}</p>}
           </div>
 
           {/* Form Actions */}

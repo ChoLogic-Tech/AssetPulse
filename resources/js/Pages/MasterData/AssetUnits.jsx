@@ -1,11 +1,27 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Plus, Search, Tag, Building2, Eye,
-  Cpu, MapPin
+  Cpu, MapPin, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import { AssetUnitModal } from '@/Components/Modals/AssetUnitModal';
+
+function getPageNumbers(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  if (currentPage <= 4) {
+    return [1, 2, 3, 4, 5, '...', totalPages];
+  }
+
+  if (currentPage >= totalPages - 3) {
+    return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+
+  return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+}
 
 export default function AssetUnits({
   assetUnits = [],
@@ -17,9 +33,32 @@ export default function AssetUnits({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPropertyFilter, setSelectedPropertyFilter] = useState('');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create');
+
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handlePropertyFilterChange = (e) => {
+    setSelectedPropertyFilter(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleStatusFilterChange = (e) => {
+    setSelectedStatusFilter(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handlePerPageChange = (e) => {
+    setPerPage(Number(e.target.value));
+    setCurrentPage(1);
+  };
 
   const handleOpenCreate = () => {
     setSelectedAsset(null);
@@ -33,12 +72,13 @@ export default function AssetUnits({
     setIsModalOpen(true);
   };
 
-  const filteredAssets = assetUnits.filter((record) => {
-    const query = searchQuery.toLowerCase();
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredAssets = (Array.isArray(assetUnits) ? assetUnits : []).filter((record) => {
     const matchesSearch =
-      record.serial_number?.toLowerCase().includes(query) ||
-      record.item_name?.toLowerCase().includes(query) ||
-      record.sku?.toLowerCase().includes(query);
+      !normalizedQuery ||
+      record.serial_number?.toLowerCase().includes(normalizedQuery) ||
+      record.item_name?.toLowerCase().includes(normalizedQuery) ||
+      record.sku?.toLowerCase().includes(normalizedQuery);
 
     const matchesProperty = selectedPropertyFilter
       ? selectedPropertyFilter === 'warehouse'
@@ -53,6 +93,20 @@ export default function AssetUnits({
 
     return matchesSearch && matchesProperty && matchesStatus;
   });
+
+  const totalItems = filteredAssets.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const startIndex = (currentPage - 1) * perPage;
+  const endIndex = Math.min(startIndex + perPage, totalItems);
+  const paginatedAssets = filteredAssets.slice(startIndex, endIndex);
+  const pageNumbers = getPageNumbers(currentPage, totalPages);
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -101,16 +155,16 @@ export default function AssetUnits({
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={handleSearchChange}
               placeholder="Search Serial Number, Item, or SKU..."
               className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-between md:justify-end">
             <select
               value={selectedPropertyFilter}
-              onChange={(e) => setSelectedPropertyFilter(e.target.value)}
+              onChange={handlePropertyFilterChange}
               className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 bg-white outline-none focus:border-indigo-600"
             >
               <option value="">All Locations / Properties</option>
@@ -124,7 +178,7 @@ export default function AssetUnits({
 
             <select
               value={selectedStatusFilter}
-              onChange={(e) => setSelectedStatusFilter(e.target.value)}
+              onChange={handleStatusFilterChange}
               className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 bg-white outline-none focus:border-indigo-600"
             >
               <option value="">All Statuses</option>
@@ -133,6 +187,20 @@ export default function AssetUnits({
               <option value="Under Repair">Under Repair</option>
               <option value="Decommissioned">Decommissioned</option>
             </select>
+
+            <label className="inline-flex items-center gap-2 text-sm text-slate-500 font-medium pl-1">
+              <span>Show</span>
+              <select
+                value={perPage}
+                onChange={handlePerPageChange}
+                className="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+              <span>entries</span>
+            </label>
           </div>
         </div>
 
@@ -151,8 +219,8 @@ export default function AssetUnits({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredAssets.length > 0 ? (
-                  filteredAssets.map((asset) => {
+                {paginatedAssets.length > 0 ? (
+                  paginatedAssets.map((asset) => {
                     const statusValue = asset.status ?? asset.asset_status ?? 'Available';
                     const brandValue = asset.brand_name ?? asset.brand;
                     const modelValue = asset.model_name ?? asset.model;
@@ -221,6 +289,63 @@ export default function AssetUnits({
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer */}
+          {totalItems > 0 && (
+            <div className="px-4 py-3 bg-slate-50/70 border-t border-slate-200 flex flex-col sm:flex-row gap-3 items-center justify-between text-xs text-slate-600">
+              <div>
+                Showing <span className="font-semibold text-slate-800">{startIndex + 1}</span> to{' '}
+                <span className="font-semibold text-slate-800">{endIndex}</span> of{' '}
+                <span className="font-semibold text-slate-800">{totalItems}</span> entries
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  Prev
+                </button>
+
+                {pageNumbers.map((page, index) =>
+                  page === '...' ? (
+                    <span
+                      key={`ellipsis-${index}`}
+                      className="px-2 py-1.5 text-slate-400 select-none"
+                    >
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => setCurrentPage(page)}
+                      className={`min-w-[32px] px-2.5 py-1.5 rounded-lg border font-medium transition ${
+                        currentPage === page
+                          ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm'
+                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+
+                <button
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition"
+                >
+                  Next
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <AssetUnitModal

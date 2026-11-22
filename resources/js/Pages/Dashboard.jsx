@@ -10,14 +10,15 @@ import AuditLogsTable from '@/Components/Dashboard/AuditLogsTable';
 import AssetDetailsModal from '@/Components/Dashboard/AssetDetailsModal';
 
 export default function Dashboard({ dashboard }) {
-  const metrics = dashboard?.metrics || {
-    totalAssets: 485,
-    pendingRequests: 7,
-    totalMasterlist: 124,
-    categoriesCount: 12,
-    brandsCount: 28,
-    suppliersCount: 15,
-    lowStockItems: 3,
+
+  const metrics = {
+    totalAssets: dashboard?.totalAssets ?? 0,
+    pendingRequests: dashboard?.pendingRequests ?? 0,
+    totalMasterlist: dashboard?.totalMasterlist ?? 0,
+    categoriesCount: dashboard?.categoriesCount ?? 0,
+    brandsCount: dashboard?.brandsCount ?? 0,
+    suppliersCount: dashboard?.suppliersCount ?? 0,
+    lowStockItems: dashboard?.lowStockItems ?? 0,
   };
 
   const requests = dashboard?.recentRequests || [

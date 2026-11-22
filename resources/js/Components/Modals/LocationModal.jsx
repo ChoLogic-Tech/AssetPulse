@@ -16,8 +16,8 @@ export function LocationModal({
   const isView = mode === 'view';
 
   const { data, setData, post, put, processing, errors, reset, clearErrors } = useForm({
-    name: '',
-    property_id: '',
+    name: initialData?.name,
+    property_id: initialData?.property_id
   });
 
   useEffect(() => {
@@ -43,43 +43,48 @@ export function LocationModal({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const submittedName = data.name;
 
-    if (!isEdit) {
+    if(mode === 'create') {
       const createPromise = new Promise((resolve, reject) => {
         post(route('locations.store'), {
           onSuccess: () => {
             onClose();
+            setTimeout(() => resolve({
+              name: data.name }), 500);
             reset();
-            resolve({ name: submittedName });
           },
-          onError: (err) => reject(err),
+          onError: (errors) => {
+            reject(errors);
+          },
         });
       });
 
       toast.promise(createPromise, {
         loading: 'Adding location...',
-        success: (res) => `Location "${res.name}" successfully created.`,
+        success: (res) =>  `Location "${res.name}" successfully created.`,
         error: 'Failed to create location. Please check the form for errors.',
       });
-    } else {
-      const updatePromise = new Promise((resolve, reject) => {
-        put(route('locations.update', initialData.id), {
-          onSuccess: () => {
-            onClose();
-            resolve({ name: submittedName });
-          },
-          onError: (err) => reject(err),
-        });
-      });
 
-      toast.promise(updatePromise, {
-        loading: 'Updating location...',
-        success: (res) => `Location "${res.name}" successfully updated.`,
-        error: 'Failed to update location. Please check the form for errors.',
-      });
-    }
-  };
+    } else {
+          const updatePromise = new Promise((resolve, reject) => {
+            put(route('locations.update', initialData.id), {
+              onSuccess: () => {
+                onClose();
+                resolve({ name: data.name });
+              },
+              onError: (errors) => {
+                reject(errors);
+              },
+            });
+          });
+    
+          toast.promise(updatePromise, {
+            loading: 'Updating location...',
+            success: (res) => `Location "${res.name}" successfully updated.`,
+            error: 'Failed to update item. Please check the form for errors.',
+          });
+        }
+    };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 overflow-y-auto">

@@ -3,76 +3,96 @@ import { CheckCircle2 } from 'lucide-react';
 import { useForm } from '@inertiajs/react';
 import { toast } from 'sonner';
 
-export function ItemMasterModal({ 
-  isOpen, 
-  onClose, 
-  mode = 'create', 
+export function ItemMasterModal({
+  isOpen,
+  onClose,
+  mode = 'create',
   initialData = null,
+  skus = [],
+  uoms = [],
   categories = [],
   brands = [],
-  models = []
+  models = [],
 }) {
-  if (!isOpen) return null;
-  
   const isViewOnly = mode === 'view';
   const isEdit = mode === 'edit';
 
-  // 1. Create a ref for the textarea
   const textareaRef = useRef(null);
 
-  const { data, setData, post, put, processing, errors, reset } = useForm({
-    sku: initialData?.sku || '',
-    uom: initialData?.uom || '',
-    item_name: initialData?.item_name || '',
-    category_id: initialData?.category_id || '',
-    brand_id: initialData?.brand_id || '',
-    model_id: initialData?.model_id || '',
-    description: initialData?.description || '',
+  const { data, setData, post, put, processing, errors, reset, clearErrors } = useForm({
+    sku_id: '',
+    uom_id: '',
+    item_name: '',
+    category_id: '',
+    brand_id: '',
+    model_id: '',
+    description: '',
   });
 
-  // 2. Helper function to adjust height automatically
   const adjustHeight = () => {
     const textarea = textareaRef.current;
     if (textarea) {
-      textarea.style.height = 'auto'; // Reset height to recalculate properly
-      textarea.style.height = `${textarea.scrollHeight}px`; // Set to scroll height
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
     }
   };
 
-  // Adjust height whenever description data changes (e.g., when initialData loads)
   useEffect(() => {
     adjustHeight();
-  }, [data.description]);
-    
+  }, [data.description, isOpen]);
+
   useEffect(() => {
+    if (!isOpen) return;
+
+    clearErrors();
+
     if (initialData && (isEdit || isViewOnly)) {
       setData({
-        sku: initialData.sku || '',
-        uom: initialData.uom || '',
-        item_name: initialData.item_name || '',
-        category_id: initialData.category_id || '',
-        brand_id: initialData.brand_id || '',
-        model_id: initialData.model_id || '',
-        description: initialData.description || '',
+        sku_id: initialData.sku_id ?? '',
+        uom_id: initialData.uom_id ?? '',
+        item_name: initialData.item_name ?? '',
+        category_id: initialData.category_id ?? '',
+        brand_id: initialData.brand_id ?? '',
+        model_id: initialData.model_id ?? '',
+        description: initialData.description ?? '',
       });
     } else {
       reset();
     }
   }, [isOpen, initialData, mode]);
-    
+
+  if (!isOpen) return null;
+
+  const skuList = Array.isArray(skus) ? skus : [];
+  const uomList = Array.isArray(uoms) ? uoms : [];
+  const categoryList = Array.isArray(categories) ? categories : [];
+  const brandList = Array.isArray(brands) ? brands : [];
+  const modelList = Array.isArray(models) ? models : [];
+
+  const handleFieldChange = (field, value) => {
+    setData(field, value);
+    if (errors[field]) {
+      clearErrors(field);
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (isViewOnly || processing) return;
+
+    const itemName = data.item_name.trim();
 
     if (mode === 'create') {
       const createPromise = new Promise((resolve, reject) => {
         post(route('itemmaster.store'), {
+          preserveScroll: true,
           onSuccess: () => {
-            onClose();
-            setTimeout(() => resolve({ name: data.item_name }), 500);
             reset();
+            onClose();
+            resolve({ name: itemName });
           },
-          onError: (errors) => {
-            reject(errors);
+          onError: (err) => {
+            reject(err);
           },
         });
       });
@@ -82,16 +102,18 @@ export function ItemMasterModal({
         success: (res) => `Item "${res.name}" successfully created.`,
         error: 'Failed to create item. Please check the form for errors.',
       });
-
     } else {
+      if (!initialData?.id) return;
+
       const updatePromise = new Promise((resolve, reject) => {
         put(route('itemmaster.update', initialData.id), {
+          preserveScroll: true,
           onSuccess: () => {
             onClose();
-            resolve({ name: data.item_name });
+            resolve({ name: itemName });
           },
-          onError: (errors) => {
-            reject(errors);
+          onError: (err) => {
+            reject(err);
           },
         });
       });
@@ -111,47 +133,63 @@ export function ItemMasterModal({
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
           <h3 className="font-semibold text-slate-800">
             {mode === 'create' && 'Add Master Item Catalog Record'}
-            {mode === 'edit' && 'Edit Catalog Master Record'}
-            {mode === 'view' && 'Item Master Record Details'}
+            {isEdit && 'Edit Catalog Master Record'}
+            {isViewOnly && 'Item Master Record Details'}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 text-lg"
+          >
             &times;
           </button>
         </div>
 
         {/* Modal Form Body */}
-        <form className="p-6 space-y-4" onSubmit={handleSubmit}>
+        <form className="p-6 space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
                 SKU (Stock Keeping Unit) *
               </label>
-              <input
-                type="text"
+              <select
                 disabled={isViewOnly}
-                placeholder="e.g. SKU-LAP-001"
-                value={data.sku}
-                onChange={(e) => setData('sku', e.target.value)}
+                value={data.sku_id}
+                onChange={(e) => handleFieldChange('sku_id', e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                required
-              />
-              {errors.sku && <p className="text-xs text-red-500 mt-1">{errors.sku}</p>}
+              >
+                <option value="">Select SKU</option>
+                {skuList.map((skuItem) => (
+                  <option key={skuItem.id} value={skuItem.id}>
+                    {skuItem.sku_code}
+                  </option>
+                ))}
+              </select>
+              {errors.sku_id && (
+                <p className="text-xs text-red-500 mt-1">{errors.sku_id}</p>
+              )}
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
                 Unit of Measure (UOM) *
               </label>
-              <input
-                type="text"
+              <select
                 disabled={isViewOnly}
-                placeholder="e.g. pcs, box, meters, set"
-                value={data.uom}
-                onChange={(e) => setData('uom', e.target.value)}
+                value={data.uom_id}
+                onChange={(e) => handleFieldChange('uom_id', e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                required
-              />
-              {errors.uom && <p className="text-xs text-red-500 mt-1">{errors.uom}</p>}
+              >
+                <option value="">Select UOM</option>
+                {uomList.map((uomItem) => (
+                  <option key={uomItem.id} value={uomItem.id}>
+                    {uomItem.name}
+                  </option>
+                ))}
+              </select>
+              {errors.uom_id && (
+                <p className="text-xs text-red-500 mt-1">{errors.uom_id}</p>
+              )}
             </div>
           </div>
 
@@ -163,11 +201,12 @@ export function ItemMasterModal({
               type="text"
               disabled={isViewOnly}
               value={data.item_name}
-              onChange={(e) => setData('item_name', e.target.value)}
+              onChange={(e) => handleFieldChange('item_name', e.target.value)}
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-              required
             />
-            {errors.item_name && <p className="text-xs text-red-500 mt-1">{errors.item_name}</p>}
+            {errors.item_name && (
+              <p className="text-xs text-red-500 mt-1">{errors.item_name}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -176,14 +215,14 @@ export function ItemMasterModal({
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
                 Category
               </label>
-              <select 
+              <select
                 disabled={isViewOnly}
                 value={data.category_id}
-                onChange={(e) => setData('category_id', e.target.value)}
+                onChange={(e) => handleFieldChange('category_id', e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
               >
                 <option value="">Select Category</option>
-                {categories.map((category) => (
+                {categoryList.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
                   </option>
@@ -196,14 +235,14 @@ export function ItemMasterModal({
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
                 Brand
               </label>
-              <select 
+              <select
                 disabled={isViewOnly}
                 value={data.brand_id}
-                onChange={(e) => setData('brand_id', e.target.value)}
+                onChange={(e) => handleFieldChange('brand_id', e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
               >
                 <option value="">Select Brand</option>
-                {brands.map((brand) => (
+                {brandList.map((brand) => (
                   <option key={brand.id} value={brand.id}>
                     {brand.name}
                   </option>
@@ -216,14 +255,14 @@ export function ItemMasterModal({
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
                 Model
               </label>
-              <select 
+              <select
                 disabled={isViewOnly}
                 value={data.model_id}
-                onChange={(e) => setData('model_id', e.target.value)}
+                onChange={(e) => handleFieldChange('model_id', e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500"
               >
                 <option value="">Select Model</option>
-                {models.map((model) => (
+                {modelList.map((model) => (
                   <option key={model.id} value={model.id}>
                     {model.name}
                   </option>
@@ -243,11 +282,11 @@ export function ItemMasterModal({
               placeholder="Enter item specs, extended descriptions, or standard notes..."
               value={data.description}
               onChange={(e) => {
-                setData('description', e.target.value);
+                handleFieldChange('description', e.target.value);
                 adjustHeight();
               }}
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none disabled:bg-slate-50 disabled:text-slate-500 resize-none overflow-hidden"
-            ></textarea>
+            />
           </div>
 
           {/* Form Actions */}
@@ -266,10 +305,13 @@ export function ItemMasterModal({
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition disabled:opacity-50"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                {processing 
-                ? (mode === 'create' ? 'Creating...' : 'Saving...') 
-                : (mode === 'create' ? 'Create Item' : 'Save Changes')
-                }
+                {processing
+                  ? mode === 'create'
+                    ? 'Creating...'
+                    : 'Saving...'
+                  : mode === 'create'
+                  ? 'Create Item'
+                  : 'Save Changes'}
               </button>
             )}
           </div>
