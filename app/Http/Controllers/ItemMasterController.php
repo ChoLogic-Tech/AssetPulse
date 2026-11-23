@@ -16,7 +16,7 @@ class ItemMasterController extends Controller
 {
     public function index()
     {   
-        $item = ItemMasterlist::with('brand', 'model', 'category', 'sku')->orderBy('item_name', 'ASC')->get();
+        $item = ItemMasterlist::with('brand', 'model', 'category', 'sku', 'uom')->orderBy('item_name', 'ASC')->get();
 
         return Inertia::render('MasterData/ItemMaster', [
             'item' => $item,
@@ -31,11 +31,11 @@ class ItemMasterController extends Controller
     public function store(Request $request) 
     {
         $validated = $request->validate([
-            'sku' => 'required|string|max:255',
+            'sku_id' => 'required|integer',
+            'uom_id' => 'required|integer',
             'item_name' => 'required|string|max:255',
             'brand_id' => 'nullable|exists:brands,id',
             'model_id' => 'nullable|exists:models,id',
-            'uom' => 'required|string|max:50',
             'category_id' => 'nullable|exists:categories,id',
             'description' => 'nullable|string',
         ]);
@@ -49,11 +49,11 @@ class ItemMasterController extends Controller
     public function update(Request $request, ItemMasterlist $itemmaster) 
     {
         $validated = $request->validate([
-            'sku' => 'required|string|max:255',
+            'sku_id' => 'required|integer',
+            'uom_id' => 'required|integer',
             'item_name' => 'required|string|max:255',
             'brand_id' => 'nullable|exists:brands,id',
             'model_id' => 'nullable|exists:models,id',
-            'uom' => 'required|string|max:50',
             'category_id' => 'nullable|exists:categories,id',
             'description' => 'nullable|string',
         ]);
@@ -63,7 +63,6 @@ class ItemMasterController extends Controller
         return redirect()->back()->with('success', 'Item successfully updated.');
     }
 
-    // Changed $itemMasterlist to $itemmaster to match web.php route parameter
     public function destroy(ItemMasterlist $itemmaster) 
 {
     // Check if the item has stock logs or active inventory records
@@ -74,11 +73,6 @@ class ItemMasterController extends Controller
         return redirect()->back()->withErrors([
             'delete' => 'Cannot delete this item because it has stock-in history or active inventory records.'
         ]);
-    }
-
-    // Clean up empty main_inventory row if it exists, then delete the master item
-    if ($mainInventory) {
-        DB::table('main_inventory')->where('item_id', $itemmaster->id)->delete();
     }
     
     $itemmaster->delete();

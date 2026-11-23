@@ -196,7 +196,6 @@ export default function Brands({ brand = [] }) {
                     <tr key={item.id} className="hover:bg-slate-50/80 transition">
                       <td className="py-3.5 px-4">
                         <div className="font-semibold text-slate-900">{item.name}</div>
-                        <div className="text-xs text-slate-400 font-mono">ID: #{item.id}</div>
                       </td>
                       <td className="py-3.5 px-4">
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">

@@ -196,7 +196,6 @@ export default function Skus({ sku = [] }) {
                     <tr key={item.id} className="hover:bg-slate-50/80 transition">
                       <td className="py-3.5 px-4">
                         <div className="font-semibold text-slate-900 font-mono">{item.sku_code}</div>
-                        <div className="text-xs text-slate-400 font-mono">ID: #{item.id}</div>
                       </td>
                       <td className="py-3.5 px-4 text-xs text-slate-600">
                         {item.descriptions || <span className="text-slate-400 italic">No description</span>}

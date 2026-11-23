@@ -24,7 +24,7 @@ function getPageNumbers(currentPage, totalPages) {
   return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
 }
 
-export default function UnitOfMeasures({ unitofmeasure = [] }) {
+export default function UnitOfMeasures({ unitofmeasures = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -108,7 +108,7 @@ export default function UnitOfMeasures({ unitofmeasure = [] }) {
   };
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const uomList = Array.isArray(unitofmeasure) ? unitofmeasure : [];
+  const uomList = Array.isArray(unitofmeasures) ? unitofmeasures : [];
 
   const filteredUoms = uomList.filter((oum) => {
     const desc = oum.description ?? oum.descriptions ?? '';
@@ -212,7 +212,6 @@ export default function UnitOfMeasures({ unitofmeasure = [] }) {
                       <tr key={item.id} className="hover:bg-slate-50/80 transition">
                         <td className="py-3.5 px-4">
                           <div className="font-semibold text-slate-900 font-mono">{item.name}</div>
-                          <div className="text-xs text-slate-400 font-mono">ID: #{item.id}</div>
                         </td>
                         <td className="py-3.5 px-4 text-xs text-slate-600">
                           {desc || <span className="text-slate-400 italic">No description</span>}

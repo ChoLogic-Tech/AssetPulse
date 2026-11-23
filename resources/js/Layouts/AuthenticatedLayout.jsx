@@ -23,7 +23,7 @@ export default function AuthenticatedLayout({ user, pageTitle, children }) {
         {/* Global Sonner Toaster positioned at the bottom right */}
         <Toaster
           position="bottom-right"
-          rigchColors
+          richColors
           expand={true}
           />
       </div>

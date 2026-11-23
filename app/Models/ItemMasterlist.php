@@ -23,6 +23,10 @@ class ItemMasterlist extends Model
         return $this->belongsTo(Sku::class, 'sku_id');
     }
 
+    public function uom () {
+        return $this->belongsTo(UnitOfMeasure::class, 'uom_id');
+    }
+
     public function brand() 
     {
         return $this->belongsTo(Brand::class, 'brand_id');

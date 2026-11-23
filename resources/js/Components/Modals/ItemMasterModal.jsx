@@ -346,6 +346,7 @@ export function ItemMasterModal({
                 onChange={(val) => handleFieldChange('uom_id', val)}
                 options={uomList}
                 getOptionLabel={(uomItem) => uomItem.name}
+                getOptionSubLabel={(uomItem) => uomItem.descriptions}
                 placeholder="Select UOM"
                 searchPlaceholder="Search UOM..."
                 hasError={Boolean(errors.uom_id)}

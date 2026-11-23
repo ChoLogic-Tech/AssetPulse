@@ -200,7 +200,6 @@ export default function Supplier({ suppliers = [] }) {
                     <tr key={supplier.id} className="hover:bg-slate-50/80 transition">
                       <td className="py-3.5 px-4">
                         <div className="font-semibold text-slate-900">{supplier.name}</div>
-                        <div className="text-xs text-slate-400 font-mono">ID: #{supplier.id}</div>
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="text-slate-800 font-medium">{supplier.contact_person}</div>

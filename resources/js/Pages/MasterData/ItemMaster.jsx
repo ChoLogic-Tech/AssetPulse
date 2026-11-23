@@ -417,7 +417,7 @@ export default function ItemMaster({ item = [], unitofmeasures =[], skus = [], c
                           <div className="text-xs text-slate-400">{currentItem.model?.name || 'No Model'}</div>
                         </td>
                         <td className="py-3.5 px-4 font-mono text-xs text-slate-600">
-                          {currentItem.uom}
+                          {currentItem.uom?.name}
                         </td>
                         <td className="py-3.5 px-4 text-xs text-slate-500 max-w-xs truncate" title={currentItem.description}>
                           {currentItem.description || 'N/A'}

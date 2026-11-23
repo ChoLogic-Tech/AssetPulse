@@ -212,7 +212,7 @@ export default function Models({ model = [], brands = [] }) {
                       <td className="py-3.5 px-4">
                         <div className="font-semibold text-slate-900">{item.name}</div>
                         <div className="text-xs text-slate-400 font-mono">
-                          Brand: {item.brand?.name || 'N/A'} | ID: #{item.id}
+                          Brand: {item.brand?.name || 'N/A'}
                         </div>
                       </td>
                       <td className="py-3.5 px-4">

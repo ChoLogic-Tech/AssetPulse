@@ -279,7 +279,6 @@ export default function Locations({ location = [], property = [] }) {
                     <tr key={loc.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3.5 px-4">
                         <div className="font-semibold text-slate-900">{loc.name}</div>
-                        <div className="text-xs text-slate-400 font-mono">ID: #{loc.id}</div>
                       </td>
                       <td className="py-3.5 px-4">
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
