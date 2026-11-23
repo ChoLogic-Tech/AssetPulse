@@ -5,9 +5,124 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import MetricCards from '@/Components/Dashboard/MetricCards';
 import RequisitionsTable from '@/Components/Dashboard/RequisitionsTable';
 import ParStockTable from '@/Components/Dashboard/ParStockTable';
-import SerializedAssetsTable from '@/Components/Dashboard/SerializedAssetsTable';
 import AuditLogsTable from '@/Components/Dashboard/AuditLogsTable';
 import AssetDetailsModal from '@/Components/Dashboard/AssetDetailsModal';
+
+function normalizeAssetUnitRow(row) {
+  if (!row || typeof row !== 'object') return row;
+
+  const serial = row.serial ?? row.serial_number ?? '';
+  const name = row.name ?? row.item_name ?? 'N/A';
+  const property = row.property ?? row.property_name ?? 'Central Warehouse';
+  const location = row.location ?? row.location_name ?? '';
+  const status = row.status ?? row.asset_status ?? 'Available';
+
+  return {
+    ...row,
+    id: row.id ?? row.asset_id,
+    serial,
+    serial_number: row.serial_number ?? serial,
+    tag: row.tag ?? row.sku_code ?? row.sku ?? (row.id ? `AST-${row.id}` : '—'),
+    name,
+    item_name: row.item_name ?? name,
+    category: row.category ?? row.category_name ?? row.sku_code ?? row.sku ?? 'Serialized Asset',
+    property,
+    property_name: row.property_name ?? property,
+    location_name: location,
+    assignedTo:
+      row.assignedTo ??
+      row.assigned_to ??
+      (location ? `${property} • ${location}` : property),
+    status,
+    purchaseDate:
+      row.purchaseDate ??
+      row.purchase_date ??
+      (row.date_received ? String(row.date_received).slice(0, 10) : '—'),
+    warrantyExp: row.warrantyExp ?? row.warranty_exp ?? '—',
+    notes:
+      row.notes ??
+      (row.supplier_name ? `Supplier: ${row.supplier_name}` : ''),
+  };
+}
+
+function DashboardSerializedAssetsTable({ assets = [], search = '', onInspect, getStatusBadge }) {
+  const q = search.trim().toLowerCase();
+  const rows = (Array.isArray(assets) ? assets : []).filter((asset) => {
+    if (!q) return true;
+    return (
+      String(asset.serial_number ?? asset.serial ?? '').toLowerCase().includes(q) ||
+      String(asset.item_name ?? asset.name ?? '').toLowerCase().includes(q) ||
+      String(asset.property_name ?? asset.property ?? '').toLowerCase().includes(q) ||
+      String(asset.location_name ?? '').toLowerCase().includes(q) ||
+      String(asset.status ?? '').toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-xs">
+        <thead className="bg-slate-100 text-slate-600 uppercase text-[11px] font-semibold tracking-wider border-b border-slate-200">
+          <tr>
+            <th className="py-3 px-4">Serial Number</th>
+            <th className="py-3 px-4">Item</th>
+            <th className="py-3 px-4">Property / Location</th>
+            <th className="py-3 px-4">Status</th>
+            <th className="py-3 px-4">Date Received</th>
+            <th className="py-3 px-4 text-right">Details</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100 text-slate-700">
+          {rows.length > 0 ? (
+            rows.map((asset, index) => {
+              const statusVal = asset.status ?? 'Available';
+              return (
+                <tr key={asset.id ?? `${asset.serial}-${index}`} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="py-3 px-4 font-mono font-semibold text-slate-900">
+                    {asset.serial_number || asset.serial || '—'}
+                  </td>
+                  <td className="py-3 px-4 font-medium text-slate-800">
+                    {asset.item_name || asset.name || '—'}
+                  </td>
+                  <td className="py-3 px-4 text-slate-600">
+                    <div>{asset.property_name || asset.property || 'Central Warehouse'}</div>
+                    {asset.location_name && (
+                      <div className="text-[11px] text-slate-400">{asset.location_name}</div>
+                    )}
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${getStatusBadge(statusVal)}`}>
+                      {statusVal}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-slate-500">
+                    {asset.date_received
+                      ? new Date(asset.date_received).toLocaleDateString()
+                      : asset.purchaseDate || '—'}
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <button
+                      type="button"
+                      onClick={() => onInspect(asset)}
+                      className="px-2.5 py-1 text-[11px] font-medium text-blue-600 hover:bg-blue-50 rounded border border-blue-200 transition-colors"
+                    >
+                      Inspect
+                    </button>
+                  </td>
+                </tr>
+              );
+            })
+          ) : (
+            <tr>
+              <td colSpan="6" className="py-8 text-center text-slate-400">
+                No serialized asset units found.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function Dashboard({ dashboard }) {
 
@@ -35,10 +150,17 @@ export default function Dashboard({ dashboard }) {
     { id: 'ITM-504', name: 'Zebra Thermal Ribbon 85A', category: 'Consumables', currentStock: 25, parLevel: 20, variance: '+5 pcs (Over)', status: 'Optimal' },
   ];
 
-  const serializedAssets = dashboard?.recentAssets || [
-    { serial: 'SN-C02G10X9MD81', tag: 'TAG-GH-041', name: 'MacBook Pro 16" M3 Max', category: 'Laptops', property: 'Henann Regency', assignedTo: 'Rachel Adams (GM)', status: 'Assigned', purchaseDate: '2025-02-10', warrantyExp: '2027-02-10', notes: 'Deployed to Executive Office' },
-    { serial: 'SN-7X889K2-SRV99', tag: 'TAG-WH-009', name: 'Dell PowerEdge R750 Server', category: 'Servers', property: 'Main Central Warehouse', assignedTo: 'Unassigned (Vault)', status: 'In Warehouse', purchaseDate: '2024-08-15', warrantyExp: '2028-08-15', notes: 'Infrastructure reserve pool' },
-  ];
+  const rawAssetUnits =
+    dashboard?.assetUnits ??
+    dashboard?.serializedAssets ??
+    dashboard?.recentAssets;
+
+  const serializedAssets = Array.isArray(rawAssetUnits)
+    ? rawAssetUnits.map(normalizeAssetUnitRow)
+    : [
+        { serial: 'SN-C02G10X9MD81', serial_number: 'SN-C02G10X9MD81', tag: 'TAG-GH-041', name: 'MacBook Pro 16" M3 Max', item_name: 'MacBook Pro 16" M3 Max', category: 'Laptops', property: 'Henann Regency', property_name: 'Henann Regency', assignedTo: 'Rachel Adams (GM)', status: 'Assigned', purchaseDate: '2025-02-10', warrantyExp: '2027-02-10', notes: 'Deployed to Executive Office' },
+        { serial: 'SN-7X889K2-SRV99', serial_number: 'SN-7X889K2-SRV99', tag: 'TAG-WH-009', name: 'Dell PowerEdge R750 Server', item_name: 'Dell PowerEdge R750 Server', category: 'Servers', property: 'Main Central Warehouse', property_name: 'Main Central Warehouse', assignedTo: 'Unassigned (Vault)', status: 'In Warehouse', purchaseDate: '2024-08-15', warrantyExp: '2028-08-15', notes: 'Infrastructure reserve pool' },
+      ];
 
   const mostRequestedItems = [
     { name: 'Cat6 Patch Cable 2m', requests: 42, category: 'Networking' },
@@ -53,15 +175,17 @@ export default function Dashboard({ dashboard }) {
     { id: 'LOG-899', timestamp: '2026-11-04 16:40', user: 'James Marvin Ragas', action: 'CREATE', targetType: 'Serialized Asset', description: 'Registered new asset TAG-GH-041 (MacBook Pro 16")' },
   ];
 
-  const propertyDistribution = [
-    { name: 'Henann Regency', assets: 95 },
-    { name: 'Henann Palm', assets: 72 },
-    { name: 'Henann Lagoon', assets: 68 },
-    { name: 'Henann Garden', assets: 60 },
-    { name: 'Henann Park', assets: 54 },
-    { name: 'Henann Crystal', assets: 45 },
-    { name: 'Henann Prime', assets: 41 },
-  ];
+  const propertyDistribution = Array.isArray(dashboard?.propertyDistribution)
+  ? dashboard.propertyDistribution
+  : [
+      { name: 'Henann Regency', assets: 95 },
+      { name: 'Henann Palm', assets: 72 },
+      { name: 'Henann Lagoon', assets: 68 },
+      { name: 'Henann Garden', assets: 60 },
+      { name: 'Henann Park', assets: 54 },
+      { name: 'Henann Crystal', assets: 45 },
+      { name: 'Henann Prime', assets: 41 },
+    ];
 
   const [activeTab, setActiveTab] = useState('requisitions');
   const [searchTerm, setSearchTerm] = useState('');
@@ -71,16 +195,20 @@ export default function Dashboard({ dashboard }) {
     switch (status) {
       case 'Fulfilled':
       case 'Assigned':
+      case 'Available':
       case 'Optimal':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       case 'Pending Approval':
+      case 'Under Repair':
         return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'Approved':
       case 'Ready for Release':
+      case 'Deployed':
       case 'In Warehouse':
         return 'bg-blue-50 text-blue-700 border-blue-200';
       case 'Low Stock':
       case 'Critical':
+      case 'Decommissioned':
         return 'bg-red-50 text-red-700 border-red-200 font-semibold';
       default:
         return 'bg-slate-100 text-slate-700 border-slate-200';
@@ -156,7 +284,14 @@ export default function Dashboard({ dashboard }) {
 
             {activeTab === 'requisitions' && <RequisitionsTable requests={requests} search={searchTerm} getStatusBadge={getStatusBadge} />}
             {activeTab === 'parstock' && <ParStockTable items={parStockInventory} search={searchTerm} getStatusBadge={getStatusBadge} />}
-            {activeTab === 'assets' && <SerializedAssetsTable assets={serializedAssets} search={searchTerm} onInspect={setSelectedAsset} />}
+            {activeTab === 'assets' && (
+              <DashboardSerializedAssetsTable
+                assets={serializedAssets}
+                search={searchTerm}
+                onInspect={setSelectedAsset}
+                getStatusBadge={getStatusBadge}
+              />
+            )}
             {activeTab === 'audit' && <AuditLogsTable logs={auditLogs} search={searchTerm} getAuditActionBadge={getAuditActionBadge} />}
           </div>
 
@@ -181,10 +316,10 @@ export default function Dashboard({ dashboard }) {
             </div>
 
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 space-y-4">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Property Asset Distribution</h3>
-                <span className="text-[11px] text-slate-400">7 Locations</span>
-              </div>
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Property Asset Distribution</h3>
+              <span className="text-[11px] text-slate-400">{propertyDistribution.length} Locations</span>
+            </div>
               <div className="space-y-2.5">
                 {propertyDistribution.map((prop, idx) => (
                   <div key={idx} className="flex justify-between items-center text-xs">

@@ -75,7 +75,7 @@ export default function Sidebar() {
             submenu: true,
             submenuItems: [
                 { title: "Item Masterlists", icon: ListCheck, href: "/master-data/itemmaster" },
-                { title: "Asset Units", icon: ShelvingUnit, href: "/master-data/asset-units" },
+                { title: "Asset Units", icon: ShelvingUnit, href: "/master-data/assetunits" },
                 { title: "SKUs", icon: Barcode, href: "/master-data/skus"},
                 { title: "Unit of Measures", icon: Tags, href: "/master-data/unitofmeasures"},
                 { title: "Categories", icon: Layers, href: "/master-data/categories" },

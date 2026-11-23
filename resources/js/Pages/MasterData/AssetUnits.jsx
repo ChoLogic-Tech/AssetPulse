@@ -1,11 +1,58 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Plus, Search, Tag, Building2, Eye,
-  Cpu, MapPin, ChevronLeft, ChevronRight
+  Plus,
+  Search,
+  Tag,
+  Building2,
+  Eye,
+  Pencil,
+  Cpu,
+  MapPin,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import { AssetUnitModal } from '@/Components/Modals/AssetUnitModal';
+
+function resolveAssetSku(record, skuList = [], itemList = []) {
+  if (!record || typeof record !== 'object') return '';
+
+  if (typeof record.sku_code === 'string' && record.sku_code.trim()) {
+    return record.sku_code.trim();
+  }
+  if (typeof record.sku === 'string' && record.sku.trim()) {
+    return record.sku.trim();
+  }
+
+  const matchedItem = Array.isArray(itemList)
+    ? itemList.find((item) => item && String(item.id) === String(record.item_id))
+    : null;
+
+  if (matchedItem) {
+    if (typeof matchedItem.sku_code === 'string' && matchedItem.sku_code.trim()) {
+      return matchedItem.sku_code.trim();
+    }
+    if (typeof matchedItem.sku === 'string' && matchedItem.sku.trim()) {
+      return matchedItem.sku.trim();
+    }
+  }
+
+  const matchedSku = Array.isArray(skuList)
+    ? skuList.find(
+        (s) =>
+          s &&
+          ((record.item_id != null &&
+            ((s.item_id != null && String(s.item_id) === String(record.item_id)) ||
+              (s.item_masterlist_id != null &&
+                String(s.item_masterlist_id) === String(record.item_id)))) ||
+            (matchedItem?.sku_id != null && s.id != null && String(s.id) === String(matchedItem.sku_id)) ||
+            (record.sku_id != null && s.id != null && String(s.id) === String(record.sku_id)))
+      )
+    : null;
+
+  return matchedSku?.sku_code ? String(matchedSku.sku_code).trim() : '';
+}
 
 function getPageNumbers(currentPage, totalPages) {
   if (totalPages <= 7) {
@@ -27,6 +74,7 @@ export default function AssetUnits({
   assetUnits = [],
   properties = [],
   items = [],
+  skus = [],
   locations = [],
   suppliers = [],
 }) {
@@ -39,6 +87,13 @@ export default function AssetUnits({
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create');
+
+  const safeAssetUnits = Array.isArray(assetUnits) ? assetUnits : [];
+  const safeProperties = Array.isArray(properties) ? properties : [];
+  const safeSkus = Array.isArray(skus) ? skus : [];
+  const safeItems = Array.isArray(items) ? items : [];
+  const safeLocations = Array.isArray(locations) ? locations : [];
+  const safeSuppliers = Array.isArray(suppliers) ? suppliers : [];
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -72,13 +127,24 @@ export default function AssetUnits({
     setIsModalOpen(true);
   };
 
+  const handleOpenEdit = (asset) => {
+    setSelectedAsset(asset);
+    setModalMode('edit');
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+  };
+
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredAssets = (Array.isArray(assetUnits) ? assetUnits : []).filter((record) => {
+  const filteredAssets = safeAssetUnits.filter((record) => {
+    const skuValue = resolveAssetSku(record, safeSkus, safeItems);
     const matchesSearch =
       !normalizedQuery ||
       record.serial_number?.toLowerCase().includes(normalizedQuery) ||
       record.item_name?.toLowerCase().includes(normalizedQuery) ||
-      record.sku?.toLowerCase().includes(normalizedQuery);
+      skuValue.toLowerCase().includes(normalizedQuery);
 
     const matchesProperty = selectedPropertyFilter
       ? selectedPropertyFilter === 'warehouse'
@@ -169,7 +235,7 @@ export default function AssetUnits({
             >
               <option value="">All Locations / Properties</option>
               <option value="warehouse">Central Warehouse</option>
-              {properties.map((p) => (
+              {safeProperties.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
@@ -222,18 +288,22 @@ export default function AssetUnits({
                 {paginatedAssets.length > 0 ? (
                   paginatedAssets.map((asset) => {
                     const statusValue = asset.status ?? asset.asset_status ?? 'Available';
+                    const skuValue = resolveAssetSku(asset, safeSkus, safeItems);
                     const brandValue = asset.brand_name ?? asset.brand;
                     const modelValue = asset.model_name ?? asset.model;
-                    const propertyValue = asset.property_name ?? asset.current_property ?? 'Central Warehouse';
+                    const propertyValue =
+                      asset.property_name ?? asset.current_property ?? 'Central Warehouse';
                     const locationValue = asset.location_name ?? asset.room_location;
 
                     return (
                       <tr key={asset.id ?? asset.asset_id} className="hover:bg-slate-50/80 transition">
                         <td className="py-3.5 px-4">
-                          <div className="font-mono font-bold text-slate-900">{asset.serial_number}</div>
+                          <div className="font-mono font-bold text-slate-900">
+                            {asset.serial_number}
+                          </div>
                           <div className="text-xs text-slate-400 font-mono flex items-center gap-1 mt-0.5">
                             <Tag className="w-3 h-3" />
-                            {asset.sku}
+                            {skuValue || '—'}
                           </div>
                         </td>
                         <td className="py-3.5 px-4">
@@ -264,17 +334,29 @@ export default function AssetUnits({
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-xs text-slate-400">
-                          {asset.date_received}
+                          {asset.date_received
+                            ? new Date(asset.date_received).toLocaleDateString()
+                            : '—'}
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenView(asset)}
-                            title="View Asset Details"
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenView(asset)}
+                              title="View Asset Details"
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(asset)}
+                              title="Edit Asset Unit"
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -350,13 +432,14 @@ export default function AssetUnits({
 
         <AssetUnitModal
           isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          onClose={handleCloseModal}
           mode={modalMode}
           initialData={selectedAsset}
-          items={items}
-          properties={properties}
-          locations={locations}
-          suppliers={suppliers}
+          items={safeItems}
+          skus={safeSkus}
+          properties={safeProperties}
+          locations={safeLocations}
+          suppliers={safeSuppliers}
         />
       </div>
     </AuthenticatedLayout>
