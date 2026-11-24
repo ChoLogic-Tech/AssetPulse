@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { router, useForm } from '@inertiajs/react';
-import { Shield, X } from 'lucide-react';
+import { Shield, X, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function RoleModal({ 
@@ -133,8 +133,9 @@ export function RoleModal({
             <button
               type="submit"
               disabled={processing}
-              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition disabled:opacity-50"
             >
+              <CheckCircle2 className="w-4 h-4" />
               {processing 
                 ? (mode === 'create' ? 'Creating...' : 'Saving...') 
                 : (mode === 'create' ? 'Create Role' : 'Save Changes')

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Brand;
+use App\Models\ItemMasterlist;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
 
@@ -14,7 +15,8 @@ class BrandController extends Controller {
         $brand = Brand::orderBy('name', 'ASC')->get();
 
         return Inertia::render('MasterData/Brands', [
-            'brand' => $brand
+            'brand' => $brand,
+            'itemmaster' => ItemMasterlist::orderBy('item_name', 'ASC')->get(),
         ]);
 
     }

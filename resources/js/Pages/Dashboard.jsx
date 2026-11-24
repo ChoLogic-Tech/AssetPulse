@@ -8,6 +8,8 @@ import ParStockTable from '@/Components/Dashboard/ParStockTable';
 import AuditLogsTable from '@/Components/Dashboard/AuditLogsTable';
 import AssetDetailsModal from '@/Components/Dashboard/AssetDetailsModal';
 
+const OVERVIEW_ASSET_LIMIT = 10;
+
 function normalizeAssetUnitRow(row) {
   if (!row || typeof row !== 'object') return row;
 
@@ -45,9 +47,32 @@ function normalizeAssetUnitRow(row) {
   };
 }
 
-function DashboardSerializedAssetsTable({ assets = [], search = '', onInspect, getStatusBadge }) {
+function getLatestTimestamp(asset) {
+  const rawDate = asset.date_received ?? asset.created_at ?? asset.purchaseDate;
+  const parsed = rawDate ? Date.parse(rawDate) : NaN;
+  if (!Number.isNaN(parsed)) return parsed;
+  const numId = Number(asset.id ?? asset.asset_id ?? 0);
+  return Number.isFinite(numId) ? numId : 0;
+}
+
+function DashboardSerializedAssetsTable({
+  assets = [],
+  search = '',
+  onInspect,
+  getStatusBadge,
+  limit = OVERVIEW_ASSET_LIMIT,
+}) {
   const q = search.trim().toLowerCase();
-  const rows = (Array.isArray(assets) ? assets : []).filter((asset) => {
+
+  const sortedAssets = [...(Array.isArray(assets) ? assets : [])].sort((a, b) => {
+    const timeDiff = getLatestTimestamp(b) - getLatestTimestamp(a);
+    if (timeDiff !== 0) return timeDiff;
+    const idA = Number(a.id ?? a.asset_id ?? 0);
+    const idB = Number(b.id ?? b.asset_id ?? 0);
+    return idB - idA;
+  });
+
+  const filteredRows = sortedAssets.filter((asset) => {
     if (!q) return true;
     return (
       String(asset.serial_number ?? asset.serial ?? '').toLowerCase().includes(q) ||
@@ -57,6 +82,8 @@ function DashboardSerializedAssetsTable({ assets = [], search = '', onInspect, g
       String(asset.status ?? '').toLowerCase().includes(q)
     );
   });
+
+  const rows = filteredRows.slice(0, limit);
 
   return (
     <div className="overflow-x-auto">
@@ -120,6 +147,11 @@ function DashboardSerializedAssetsTable({ assets = [], search = '', onInspect, g
           )}
         </tbody>
       </table>
+      {filteredRows.length > limit && (
+        <div className="px-4 py-2.5 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+          <span>Showing {rows.length} latest of {filteredRows.length} matching units</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -265,10 +297,14 @@ export default function Dashboard({ dashboard }) {
                 <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
                   {activeTab === 'requisitions' && 'Inter-Property Stock Requisition & Release Queue'}
                   {activeTab === 'parstock' && 'Main Warehouse Par Stock Table'}
-                  {activeTab === 'assets' && 'Serialized Hardware Directory'}
+                  {activeTab === 'assets' && 'Serialized Hardware Directory (Latest 10)'}
                   {activeTab === 'audit' && 'System Audit Trail Log'}
                 </h2>
-                <p className="text-xs text-slate-500 mt-0.5">Manage stock requests, item releases, and system activity logs</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {activeTab === 'assets'
+                    ? 'Showing the 10 most recently received serialized asset units'
+                    : 'Manage stock requests, item releases, and system activity logs'}
+                </p>
               </div>
               
               <div className="w-full sm:w-56">
@@ -290,6 +326,7 @@ export default function Dashboard({ dashboard }) {
                 search={searchTerm}
                 onInspect={setSelectedAsset}
                 getStatusBadge={getStatusBadge}
+                limit={OVERVIEW_ASSET_LIMIT}
               />
             )}
             {activeTab === 'audit' && <AuditLogsTable logs={auditLogs} search={searchTerm} getAuditActionBadge={getAuditActionBadge} />}
@@ -316,10 +353,10 @@ export default function Dashboard({ dashboard }) {
             </div>
 
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Property Asset Distribution</h3>
-              <span className="text-[11px] text-slate-400">{propertyDistribution.length} Locations</span>
-            </div>
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Property Asset Distribution</h3>
+                <span className="text-[11px] text-slate-400">{propertyDistribution.length} Locations</span>
+              </div>
               <div className="space-y-2.5">
                 {propertyDistribution.map((prop, idx) => (
                   <div key={idx} className="flex justify-between items-center text-xs">

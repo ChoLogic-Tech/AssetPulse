@@ -10,7 +10,7 @@ import { RoleModal } from '@/Components/Modals/RoleModal';
 import { PermissionModal } from '@/Components/Modals/PermissionModal';
 import { toast } from 'sonner';
 
-const ITEMS_PER_PAGE = 5;
+const ITEMS_PER_PAGE = 10;
 
 function PaginationBar({
   currentPage,
@@ -85,14 +85,14 @@ export default function Roles({ roles = [], permissions = [] }) {
   const [itemToDelete, setItemToDelete] = useState(null); // { type: 'role' | 'permission', item: object }
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Reset page to 1 when search query changes
+  // Reset page to 1 when search query or list size changes
   useEffect(() => {
     setRolePage(1);
-  }, [searchRoleQuery]);
+  }, [searchRoleQuery, roles.length]);
 
   useEffect(() => {
     setPermissionPage(1);
-  }, [searchPermissionQuery]);
+  }, [searchPermissionQuery, permissions.length]);
 
   // --- Role Handlers ---
   const handleOpenCreateRole = () => {
@@ -181,7 +181,7 @@ export default function Roles({ roles = [], permissions = [] }) {
     });
   };
 
-  // Filtered & Paginated Roles (5 per page)
+  // Filtered & Paginated Roles (10 per page)
   const filteredRoles = roles.filter((role) =>
     role.name?.toLowerCase().includes(searchRoleQuery.toLowerCase()) ||
     role.description?.toLowerCase().includes(searchRoleQuery.toLowerCase())
@@ -193,7 +193,7 @@ export default function Roles({ roles = [], permissions = [] }) {
     safeRolePage * ITEMS_PER_PAGE
   );
 
-  // Filtered & Paginated Permissions (5 per page)
+  // Filtered & Paginated Permissions (10 per page)
   const filteredPermissions = permissions.filter((permission) =>
     permission.name?.toLowerCase().includes(searchPermissionQuery.toLowerCase()) ||
     permission.description?.toLowerCase().includes(searchPermissionQuery.toLowerCase())
@@ -267,7 +267,6 @@ export default function Roles({ roles = [], permissions = [] }) {
                           <Shield className="w-4 h-4 text-indigo-600" />
                           {role.name}
                         </div>
-                        <div className="text-xs text-slate-400 font-mono mt-0.5">ID: #{role.id}</div>
                       </td>
                       <td className="py-3.5 px-4 text-slate-600 max-w-md">
                         {role.description || 'No description provided.'}
@@ -368,7 +367,6 @@ export default function Roles({ roles = [], permissions = [] }) {
                           <Shield className="w-4 h-4 text-indigo-600" />
                           {permission.name}
                         </div>
-                        <div className="text-xs text-slate-400 font-mono mt-0.5">ID: #{permission.id}</div>
                       </td>
                       <td className="py-3.5 px-4 text-slate-600 max-w-md">
                         {permission.description || 'No description provided.'}

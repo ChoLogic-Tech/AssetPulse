@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Search, Edit2, Trash2, Eye,
   FolderTree, Layers, AlertTriangle, ChevronLeft, ChevronRight
@@ -24,7 +24,7 @@ function getPageNumbers(currentPage, totalPages) {
   return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
 }
 
-export default function Categories({ category = [] }) {
+export default function Categories({ category = [], itemmaster = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -37,6 +37,19 @@ export default function Categories({ category = [] }) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Count total items in itemmaster per category_id
+  const itemCountByCategory = useMemo(() => {
+    const list = Array.isArray(itemmaster) ? itemmaster : [];
+    return list.reduce((counts, row) => {
+      const catId = row?.category_id ?? row?.category?.id;
+      if (catId !== undefined && catId !== null && catId !== '') {
+        const key = String(catId);
+        counts[key] = (counts[key] || 0) + 1;
+      }
+      return counts;
+    }, {});
+  }, [itemmaster]);
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -192,50 +205,54 @@ export default function Categories({ category = [] }) {
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {paginatedCategories.length > 0 ? (
-                  paginatedCategories.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition">
-                      <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-900">{item.name}</div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                          <Layers className="w-3 h-3 text-slate-500" />
-                          {item.items_count || 0} items
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-slate-400">
-                        {item.updated_at}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenView(item)}
-                            title="View Category Details"
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(item)}
-                            title="Edit Category Record"
-                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDelete(item)}
-                            title="Delete Category"
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  paginatedCategories.map((item) => {
+                    const associatedCount = itemCountByCategory[String(item.id)] ?? 0;
+
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/80 transition">
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-900">{item.name}</div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                            <Layers className="w-3 h-3 text-slate-500" />
+                            {associatedCount} {associatedCount === 1 ? 'item' : 'items'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-xs text-slate-400">
+                          {item.updated_at}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenView(item)}
+                              title="View Category Details"
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(item)}
+                              title="Edit Category Record"
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDelete(item)}
+                              title="Delete Category"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="4" className="py-8 text-center text-slate-400 text-sm">

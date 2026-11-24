@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Search, Edit2, Trash2, Eye,
   Component, Layers, AlertTriangle, ChevronLeft, ChevronRight
@@ -24,7 +24,7 @@ function getPageNumbers(currentPage, totalPages) {
   return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
 }
 
-export default function Models({ model = [], brands = [] }) {
+export default function Models({ model = [], brands = [], itemmaster = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -37,6 +37,19 @@ export default function Models({ model = [], brands = [] }) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [modelToDelete, setModelToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Count total items in itemmaster per model_id
+  const itemCountByModel = useMemo (() => {
+    const list = Array.isArray(itemmaster) ? itemmaster : [];
+    return list.reduce((counts, row) => {
+      const modelId = row?.model_id ?? row?.model?.id;
+      if (modelId !== undefined && modelId !== null && modelId !== '') {
+        const key = String(modelId);
+        counts[key] = (counts[key] || 0) + 1;
+      }
+      return counts;
+    }, {});
+  }, [itemmaster]);
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -207,8 +220,11 @@ export default function Models({ model = [], brands = [] }) {
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {paginatedModels.length > 0 ? (
-                  paginatedModels.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition">
+                  paginatedModels.map((item) => {
+                    const associatedCounts = itemCountByModel[String(item.id)] ?? 0;
+
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/80 transition">
                       <td className="py-3.5 px-4">
                         <div className="font-semibold text-slate-900">{item.name}</div>
                         <div className="text-xs text-slate-400 font-mono">
@@ -218,7 +234,7 @@ export default function Models({ model = [], brands = [] }) {
                       <td className="py-3.5 px-4">
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
                           <Layers className="w-3 h-3 text-slate-500" />
-                          {item.items_count || 0} items
+                          {associatedCounts} {associatedCounts === 1 ? 'item' : 'items'}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-xs text-slate-400">
@@ -253,7 +269,8 @@ export default function Models({ model = [], brands = [] }) {
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="4" className="py-8 text-center text-slate-400 text-sm">

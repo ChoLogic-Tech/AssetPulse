@@ -3,6 +3,56 @@ import { X, MapPin, Edit3, CheckCircle2, ChevronDown, Check, Search } from 'luci
 import { useForm } from '@inertiajs/react';
 import { toast } from 'sonner';
 
+const PROPERTY_CODES = {
+  'henann palm': 'HPM',
+  'henann regency': 'HRB',
+  'henann lagoon': 'HLB',
+  'henann garden': 'HGB',
+  'henann park': 'HPK',
+  'henann crystal': 'HCS',
+  'henann prime': 'HPB',
+};
+
+const KNOWN_CODES = Object.values(PROPERTY_CODES);
+
+function getPropertyCode(property) {
+  if (!property) return '';
+  if (property.code || property.abbreviation) {
+    return String(property.code || property.abbreviation)
+      .trim()
+      .toUpperCase()
+      .replace(/\s*-\s*$/, '');
+  }
+  const sourceName = String(property.name || '').trim().toLowerCase();
+  const matchedKey = Object.keys(PROPERTY_CODES).find((key) =>
+    sourceName.includes(key)
+  );
+  return matchedKey ? PROPERTY_CODES[matchedKey] : '';
+}
+
+function applyPropertyPrefix(currentName, nextCode, previousCode = '') {
+  const codesToStrip = Array.from(
+    new Set([previousCode, ...KNOWN_CODES].filter(Boolean))
+  );
+
+  let baseName = String(currentName ?? '').trimStart();
+
+  for (const code of codesToStrip) {
+    const escaped = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const prefixRegex = new RegExp(`^${escaped}(\\s*[-–:]\\s*|\\s+)`, 'i');
+    if (prefixRegex.test(baseName)) {
+      baseName = baseName.replace(prefixRegex, '').trimStart();
+      break;
+    }
+  }
+
+  if (!nextCode) {
+    return baseName;
+  }
+
+  return baseName ? `${nextCode} - ${baseName}` : `${nextCode} - `;
+}
+
 function ScrollablePropertyDropdown({
   value,
   onChange,
@@ -81,7 +131,11 @@ function ScrollablePropertyDropdown({
             : 'border-slate-200 hover:border-slate-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600'
         }`}
       >
-        <span className={`truncate ${!selectedProperty ? 'text-slate-600 font-medium' : 'text-slate-800 font-medium'}`}>
+        <span
+          className={`truncate ${
+            !selectedProperty ? 'text-slate-600 font-medium' : 'text-slate-800 font-medium'
+          }`}
+        >
           {selectedProperty ? selectedProperty.name : 'Central / Unassigned'}
         </span>
         <ChevronDown
@@ -163,6 +217,7 @@ export function LocationModal({
 }) {
   const isEdit = mode === 'edit';
   const isView = mode === 'view';
+  const lastCodeRef = useRef('');
 
   const { data, setData, post, put, processing, errors, reset, clearErrors } = useForm({
     name: '',
@@ -174,17 +229,25 @@ export function LocationModal({
     clearErrors();
 
     if ((isEdit || isView) && initialData) {
+      lastCodeRef.current = '';
       setData({
         name: initialData.name ?? '',
         property_id: initialData.property_id ?? '',
       });
     } else {
+      const defaultPropertyId = canSelectAnyProperty ? '' : (userPropertyId ?? '');
+      const defaultProperty = properties.find(
+        (p) => String(p.id) === String(defaultPropertyId)
+      );
+      const defaultCode = getPropertyCode(defaultProperty);
+      lastCodeRef.current = defaultCode;
+
       setData({
-        name: '',
-        property_id: canSelectAnyProperty ? '' : (userPropertyId ?? ''),
+        name: defaultCode ? `${defaultCode} - ` : '',
+        property_id: defaultPropertyId,
       });
     }
-  }, [isOpen, mode, initialData, canSelectAnyProperty, userPropertyId]);
+  }, [isOpen, mode, initialData, canSelectAnyProperty, userPropertyId, properties]);
 
   if (!isOpen) return null;
 
@@ -193,6 +256,21 @@ export function LocationModal({
     if (errors[field]) {
       clearErrors(field);
     }
+  };
+
+  const handlePropertySelect = (nextPropertyId) => {
+    handleFieldChange('property_id', nextPropertyId);
+
+    if (isEdit || isView) return;
+
+    const nextProperty = properties.find(
+      (p) => String(p.id) === String(nextPropertyId)
+    );
+    const nextCode = getPropertyCode(nextProperty);
+    const nextName = applyPropertyPrefix(data.name, nextCode, lastCodeRef.current);
+
+    lastCodeRef.current = nextCode;
+    setData('name', nextName);
   };
 
   const handleSubmit = (e) => {
@@ -311,7 +389,7 @@ export function LocationModal({
               </label>
               <ScrollablePropertyDropdown
                 value={data.property_id}
-                onChange={(val) => handleFieldChange('property_id', val)}
+                onChange={handlePropertySelect}
                 options={properties}
                 disabled={!canSelectAnyProperty}
                 hasError={Boolean(errors.property_id)}

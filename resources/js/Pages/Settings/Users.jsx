@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users as UsersIcon, Search, UserPlus, Shield, 
-  Building2, Edit3, AlertTriangle, Trash2, CheckCircle2, XCircle
+  Building2, Edit3, AlertTriangle, Trash2, CheckCircle2, XCircle,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import { UserModal } from '@/Components/Modals/UserModal';
 import { toast } from 'sonner';
+
+const PAGE_SIZE = 10;
 
 export default function Users({ users = [], roles = [], properties = [], statuses = [] }) {
   console.log("RAW USERS PROP:", users);
@@ -14,6 +17,7 @@ export default function Users({ users = [], roles = [], properties = [], statuse
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('');
   const [selectedPropertyFilter, setSelectedPropertyFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedUser, setSelectedUser] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit'
@@ -50,7 +54,7 @@ export default function Users({ users = [], roles = [], properties = [], statuse
             setIsDeleteModalOpen(false);
             setUserToDelete(null);
             // Resolve with data that can be used in success message
-            setTimeout (() => resolve({ name: userToDelete.username }), 500);
+            setTimeout(() => resolve({ name: userToDelete.username }), 500);
           },
           onError: (errors) => {
             reject(errors);
@@ -85,6 +89,24 @@ export default function Users({ users = [], roles = [], properties = [], statuse
 
     return matchesSearch && matchesRole && matchesProperty;
   });
+
+  // Reset to page 1 when filters, search, or user count changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedRoleFilter, selectedPropertyFilter, users.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * PAGE_SIZE;
+  const paginatedUsers = filteredUsers.slice(startIndex, startIndex + PAGE_SIZE);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    for (let i = 1; i <= totalPages; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   return (
     <AuthenticatedLayout pageTitle={["Settings", "User Management", "System Accounts"]}>
@@ -162,8 +184,8 @@ export default function Users({ users = [], roles = [], properties = [], statuse
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredUsers.length > 0 ? (
-                  filteredUsers.map((user) => { // Changed from (users) to (user) for consistency
+                {paginatedUsers.length > 0 ? (
+                  paginatedUsers.map((user) => {
                     const userStatusValue = user.user_status !== undefined ? user.user_status : user.status;
                     const isActive = String(userStatusValue ?? '').trim().toLowerCase() === 'active';
 
@@ -200,24 +222,24 @@ export default function Users({ users = [], roles = [], properties = [], statuse
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-xs text-slate-400">
-                          {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'} {/* Fixed typo from usesr to user */}
+                          {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
                         </td>
                         <td className="py-3.5 px-4 text-xs text-slate-400">
-                          {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : 'N/A'} {/* Fixed typo from usesr to user */}
+                          {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : 'N/A'}
                         </td>
                         <td className="py-3.5 px-4 text-xs text-slate-400">
-                          {user.last_login_ip} {/* Fixed typo from usesr to user */}
+                          {user.last_login_ip}
                         </td>
                         <td className="py-3.5 px-4 text-right space-x-1">
                           <button 
-                            onClick={() => handleOpenEdit(user)} // Now correctly references singular user
+                            onClick={() => handleOpenEdit(user)}
                             title="Edit User Details" 
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>
                           <button 
-                            onClick={() => handleOpenDelete(user)} // Now correctly references singular user
+                            onClick={() => handleOpenDelete(user)}
                             title="Delete Account" 
                             className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition"
                           >
@@ -229,7 +251,7 @@ export default function Users({ users = [], roles = [], properties = [], statuse
                   })
                 ) : (
                   <tr>
-                    <td colSpan="6" className="py-8 text-center text-slate-400 text-sm">
+                    <td colSpan="8" className="py-8 text-center text-slate-400 text-sm">
                       No user accounts found matching criteria.
                     </td>
                   </tr>
@@ -237,6 +259,56 @@ export default function Users({ users = [], roles = [], properties = [], statuse
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer */}
+          {filteredUsers.length > 0 && (
+            <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs text-slate-600">
+              <div>
+                Showing <span className="font-semibold text-slate-800">{startIndex + 1}</span> to{' '}
+                <span className="font-semibold text-slate-800">
+                  {Math.min(startIndex + PAGE_SIZE, filteredUsers.length)}
+                </span>{' '}
+                of <span className="font-semibold text-slate-800">{filteredUsers.length}</span> users
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={safePage <= 1}
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  Prev
+                </button>
+
+                {getPageNumbers().map((page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setCurrentPage(page)}
+                    className={`min-w-[32px] px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                      page === safePage
+                        ? 'border-indigo-600 bg-indigo-600 text-white'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition"
+                >
+                  Next
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Modal Component */}

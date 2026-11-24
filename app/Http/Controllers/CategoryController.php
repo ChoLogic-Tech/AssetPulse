@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use App\Models\ItemMasterlist;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
 use Inertia\Inertia;
@@ -14,7 +15,8 @@ class CategoryController extends Controller
         $category = Category::orderBy('name', 'ASC' )->get();
 
         return Inertia::render('MasterData/Categories', [
-            'category' => $category
+            'category' => $category,
+            'itemmaster' => ItemMasterlist::orderBy('item_name', 'ASC')->get(),
         ]);
     }
 

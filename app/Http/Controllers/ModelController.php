@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Models;
 use App\Models\Brand;
+use App\Models\ItemMasterlist;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -14,17 +15,19 @@ class ModelController extends Controller {
         // or just fetch all brands for the autocomplete search.
         $models = Models::with('brand')->orderBy('name', 'ASC')->get();
         $brands = Brand::orderBy('name', 'ASC')->get();
+        $items = ItemMasterlist::orderBy('item_name', 'ASC')->get();
 
         return Inertia::render('MasterData/Models', [
             'model'  => $models,
-            'brands' => $brands // <-- Passed so your modal autocomplete works!
+            'brands' => $brands,
+            'itemmaster' => $items
         ]);
     }
 
     public function store(Request $request) {
         $validated = $request->validate([
             'name'     => 'required|string|max:50|unique:models,name',
-            'brand_id' => 'required|exists:brands,id', // Added validation rules
+            'brand_id' => 'required|exists:brands,id', // Added validation rule
         ]);
 
         Models::create($validated); // Changed from 'created' to 'create'

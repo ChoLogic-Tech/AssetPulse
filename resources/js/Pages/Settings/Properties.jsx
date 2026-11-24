@@ -126,7 +126,6 @@ export default function Properties({ properties = [] }) {
                           <Building2 className="w-4 h-4 text-indigo-600" />
                           {property.name}
                         </div>
-                        <div className="text-xs text-slate-400 font-mono mt-0.5">ID: #{property.id}</div>
                       </td>
                       <td className="py-3.5 px-4 text-right space-x-1">
                         <button 
