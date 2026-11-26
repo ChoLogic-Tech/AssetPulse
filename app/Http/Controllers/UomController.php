@@ -21,13 +21,17 @@ class UomController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'code' => ['required', 'string', 'max:20', 'unique:uom,code'],
             'name' => ['required', 'string', 'max:50', 'unique:uom,name'],
             'description' => ['nullable', 'string', 'max:255'],
         ]);
 
         UnitOfMeasure::create([
+            'code' => strtoupper(trim($validated['code'])),
             'name' => trim($validated['name']),
-            'descriptions' => $validated['description'] ?? null,
+            'description' => isset($validated['description']) && trim($validated['description']) !== ''
+                ? trim($validated['description'])
+                : null,
         ]);
 
         return redirect()->back()->with('success', 'Unit of Measure successfully created.');
@@ -36,6 +40,12 @@ class UomController extends Controller
     public function update(Request $request, UnitOfMeasure $unitofmeasure)
     {
         $validated = $request->validate([
+            'code' => [
+                'required',
+                'string',
+                'max:20',
+                Rule::unique('uom', 'code')->ignore($unitofmeasure->id),
+            ],
             'name' => [
                 'required',
                 'string',
@@ -46,8 +56,11 @@ class UomController extends Controller
         ]);
 
         $unitofmeasure->update([
+            'code' => strtoupper(trim($validated['code'])),
             'name' => trim($validated['name']),
-            'descriptions' => $validated['description'] ?? null,
+            'description' => isset($validated['description']) && trim($validated['description']) !== ''
+                ? trim($validated['description'])
+                : null,
         ]);
 
         return redirect()->back()->with('success', 'Unit of Measure successfully updated.');

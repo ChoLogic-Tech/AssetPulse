@@ -25,6 +25,7 @@ export function UnitOfMeasuresModal({
   initialData = null,
 }) {
   const { data, setData, post, put, processing, errors, reset, clearErrors } = useForm({
+    code: '',
     name: '',
     description: '',
   });
@@ -40,6 +41,7 @@ export function UnitOfMeasuresModal({
     }
 
     setData({
+      code: initialData?.code || '',
       name: initialData?.name || '',
       description: initialData?.description ?? initialData?.descriptions ?? '',
     });
@@ -51,7 +53,8 @@ export function UnitOfMeasuresModal({
   const isEdit = mode === 'edit';
 
   const handleFieldChange = (field, value) => {
-    setData(field, value);
+    const nextValue = field === 'code' ? value.toUpperCase() : value;
+    setData(field, nextValue);
     if (errors[field]) {
       clearErrors(field);
     }
@@ -138,15 +141,35 @@ export function UnitOfMeasuresModal({
         <form className="p-6 space-y-4" onSubmit={handleSubmit} noValidate>
           <div>
             <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+              Unit Code *
+            </label>
+            <input
+              type="text"
+              name="code"
+              maxLength={20}
+              value={data.code}
+              onChange={(e) => handleFieldChange('code', e.target.value)}
+              disabled={isViewOnly}
+              placeholder="e.g., PC, BOX, SET, UNIT"
+              className={`${inputClass(Boolean(errors.code))} font-mono uppercase`}
+            />
+            {errors.code && (
+              <p className="mt-1 text-xs text-red-600">{errors.code}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
               Unit Name *
             </label>
             <input
               type="text"
               name="name"
+              maxLength={50}
               value={data.name}
               onChange={(e) => handleFieldChange('name', e.target.value)}
               disabled={isViewOnly}
-              placeholder="e.g., PCS, BOX, UNIT, SET"
+              placeholder="e.g., Piece, Box, Set, Unit"
               className={inputClass(Boolean(errors.name))}
             />
             {errors.name && (

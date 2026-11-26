@@ -21,6 +21,8 @@ class AssetUnitController extends Controller
         'Available',
         'Deployed',
         'Under Repair',
+        'Damage',
+        'Back Load (Iloilo)',
         'Decommissioned',
     ];
 

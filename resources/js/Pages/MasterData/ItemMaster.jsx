@@ -9,6 +9,34 @@ import { Head, router } from '@inertiajs/react';
 import { ItemMasterModal } from '@/Components/Modals/ItemMasterModal';
 import { toast } from 'sonner';
 
+const CATEGORY_PALETTE = [
+  'bg-sky-50 text-sky-700 border-sky-200',
+  'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'bg-violet-50 text-violet-700 border-violet-200',
+  'bg-amber-50 text-amber-700 border-amber-200',
+  'bg-teal-50 text-teal-700 border-teal-200',
+  'bg-indigo-50 text-indigo-700 border-indigo-200',
+  'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
+  'bg-cyan-50 text-cyan-700 border-cyan-200',
+];
+
+const UNCATEGORIZED_BADGE_CLASS = 'bg-rose-50 text-rose-700 border-rose-200';
+
+function getCategoryBadgeClass(categoryName, categoryId) {
+  const normalizedName = String(categoryName ?? '').trim();
+  if (!normalizedName || normalizedName.toLowerCase() === 'uncategorized') {
+    return UNCATEGORIZED_BADGE_CLASS;
+  }
+
+  const key = String(categoryId ?? normalizedName);
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+
+  return CATEGORY_PALETTE[hash % CATEGORY_PALETTE.length];
+}
+
 function getPageNumbers(currentPage, totalPages) {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -397,6 +425,11 @@ export default function ItemMaster({ item = [], unitofmeasures =[], skus = [], c
                       typeof currentItem.sku === 'string'
                         ? currentItem.sku
                         : currentItem.sku?.sku_code ?? 'N/A';
+                    const categoryLabel = currentItem.category?.name || 'Uncategorized';
+                    const categoryBadgeClass = getCategoryBadgeClass(
+                      categoryLabel,
+                      currentItem.category_id ?? currentItem.category?.id
+                    );
 
                     return (
                       <tr key={currentItem.id} className="hover:bg-slate-50/80 transition">
@@ -408,8 +441,10 @@ export default function ItemMaster({ item = [], unitofmeasures =[], skus = [], c
                           </div>
                         </td>
                         <td className="py-3.5 px-4">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                            {currentItem.category?.name || 'Uncategorized'}
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${categoryBadgeClass}`}
+                          >
+                            {categoryLabel}
                           </span>
                         </td>
                         <td className="py-3.5 px-4">

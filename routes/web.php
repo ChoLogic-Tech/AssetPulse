@@ -8,11 +8,14 @@ use App\Http\Controllers\ItemMasterController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\ModelController;
 use App\Http\Controllers\PropertyController;
+use App\Http\Controllers\PropertyStockInController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SkuController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\UomController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\WarehouseController;
+use App\Http\Controllers\WarehouseStockInController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -60,21 +63,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // INVENTORY MODULE ROUTES
     // ==========================================
     Route::prefix('inventory')->name('inventory.')->group(function () {
-        Route::get('/warehouse', function () {
-            return Inertia::render('Inventory/Warehouse');
-        })->name('warehouse');
+        Route::get('/warehouse', [WarehouseController::class, 'index'])->name('warehouse');
 
-        Route::get('/warehousestockin', function () {
-            return Inertia::render('Inventory/WarehouseStockIn');
-        })->name('warehousestockin');
+        Route::get('/warehousestockin', [WarehouseStockInController::class, 'index'])
+            ->name('warehousestockin.index');
 
         Route::get('/propertyinventory', function () {
             return Inertia::render('Inventory/PropertyInventory');
         })->name('propertyinventory');
 
-        Route::get('/propertystockin', function () {
-            return Inertia::render('Inventory/PropertyStockIn');
-        })->name('propertystockin');
+        Route::get('/propertystockin', [PropertyStockInController::class, 'index'])
+            ->name('propertystockin.index');
     });
 
     // ==========================================
@@ -144,6 +143,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ==========================================
     // MUTATION / RESOURCE ROUTES
     // ==========================================
+    Route::prefix('warehouseparstocks')->name('warehouseparstocks.')->group(function () {
+    Route::put('/{mainInventoryId}', [WarehouseController::class, 'updateParstock'])->name('update');
+    });
+
+    Route::prefix('warehousestockins')->name('warehousestockins.')->group(function () {
+        Route::post('/', [WarehouseStockInController::class, 'store'])->name('store');
+        Route::put('/{warehousestockin}', [WarehouseStockInController::class, 'update'])->name('update');
+        Route::delete('/{warehousestockin}', [WarehouseStockInController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::prefix('propertystockins')->name('propertystockins.')->group(function () {
+        Route::post('/', [PropertyStockInController::class, 'store'])->name('store');
+        Route::put('/{propertystockin}', [PropertyStockInController::class, 'update'])->name('update');
+        Route::delete('/{propertystockin}', [PropertyStockInController::class, 'destroy'])->name('destroy');
+    });
+
     Route::prefix('users')->name('users.')->group(function () {
         Route::post('/', [UserController::class, 'store'])->name('store');
         Route::put('/{user}', [UserController::class, 'update'])->name('update');

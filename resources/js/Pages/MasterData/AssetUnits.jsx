@@ -15,6 +15,51 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import { AssetUnitModal } from '@/Components/Modals/AssetUnitModal';
 
+const STATUS_OPTIONS = [
+  'Available',
+  'Deployed',
+  'Under Repair',
+  'Damage',
+  'Back Load (Iloilo)',
+  'Decommissioned',
+];
+
+const STATUS_STYLES = {
+  Available: {
+    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    dot: 'bg-emerald-500',
+  },
+  Deployed: {
+    badge: 'bg-sky-50 text-sky-700 border-sky-200',
+    dot: 'bg-sky-500',
+  },
+  'Under Repair': {
+    badge: 'bg-amber-50 text-amber-700 border-amber-200',
+    dot: 'bg-amber-500',
+  },
+  Damage: {
+    badge: 'bg-rose-50 text-rose-700 border-rose-200',
+    dot: 'bg-rose-500',
+  },
+  'Back Load (Iloilo)': {
+    badge: 'bg-violet-50 text-violet-700 border-violet-200',
+    dot: 'bg-violet-500',
+  },
+  Decommissioned: {
+    badge: 'bg-slate-100 text-slate-600 border-slate-300',
+    dot: 'bg-slate-400',
+  },
+};
+
+const DEFAULT_STATUS_STYLE = {
+  badge: 'bg-slate-50 text-slate-700 border-slate-200',
+  dot: 'bg-slate-400',
+};
+
+function getStatusStyle(status) {
+  return STATUS_STYLES[status] ?? DEFAULT_STATUS_STYLE;
+}
+
 function resolveAssetSku(record, skuList = [], itemList = []) {
   if (!record || typeof record !== 'object') return '';
 
@@ -174,21 +219,6 @@ export default function AssetUnits({
   const paginatedAssets = filteredAssets.slice(startIndex, endIndex);
   const pageNumbers = getPageNumbers(currentPage, totalPages);
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'Available':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'Deployed':
-        return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-      case 'Under Repair':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'Decommissioned':
-        return 'bg-rose-50 text-rose-700 border-rose-200';
-      default:
-        return 'bg-slate-100 text-slate-700 border-slate-200';
-    }
-  };
-
   return (
     <AuthenticatedLayout pageTitle={['Master Data', 'Serialized Asset Units']}>
       <Head title="Asset Units Directory" />
@@ -248,10 +278,11 @@ export default function AssetUnits({
               className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 bg-white outline-none focus:border-indigo-600"
             >
               <option value="">All Statuses</option>
-              <option value="Available">Available</option>
-              <option value="Deployed">Deployed</option>
-              <option value="Under Repair">Under Repair</option>
-              <option value="Decommissioned">Decommissioned</option>
+              {STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
             </select>
 
             <label className="inline-flex items-center gap-2 text-sm text-slate-500 font-medium pl-1">
@@ -288,6 +319,7 @@ export default function AssetUnits({
                 {paginatedAssets.length > 0 ? (
                   paginatedAssets.map((asset) => {
                     const statusValue = asset.status ?? asset.asset_status ?? 'Available';
+                    const statusStyle = getStatusStyle(statusValue);
                     const skuValue = resolveAssetSku(asset, safeSkus, safeItems);
                     const brandValue = asset.brand_name ?? asset.brand;
                     const modelValue = asset.model_name ?? asset.model;
@@ -326,10 +358,9 @@ export default function AssetUnits({
                         </td>
                         <td className="py-3.5 px-4">
                           <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadge(
-                              statusValue
-                            )}`}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusStyle.badge}`}
                           >
+                            <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`} />
                             {statusValue}
                           </span>
                         </td>

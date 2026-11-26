@@ -3,7 +3,50 @@ import { Check, CheckCircle2, ChevronDown, Cpu, Search, X } from 'lucide-react';
 import { useForm } from '@inertiajs/react';
 import { toast } from 'sonner';
 
-const STATUS_OPTIONS = ['Available', 'Deployed', 'Under Repair', 'Decommissioned'];
+const STATUS_OPTIONS = [
+  'Available',
+  'Deployed',
+  'Under Repair',
+  'Damage',
+  'Back Load (Iloilo)',
+  'Decommissioned',
+];
+
+const STATUS_STYLES = {
+  Available: {
+    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    dot: 'bg-emerald-500',
+  },
+  Deployed: {
+    badge: 'bg-sky-50 text-sky-700 border-sky-200',
+    dot: 'bg-sky-500',
+  },
+  'Under Repair': {
+    badge: 'bg-amber-50 text-amber-700 border-amber-200',
+    dot: 'bg-amber-500',
+  },
+  Damage: {
+    badge: 'bg-rose-50 text-rose-700 border-rose-200',
+    dot: 'bg-rose-500',
+  },
+  'Back Load (Iloilo)': {
+    badge: 'bg-violet-50 text-violet-700 border-violet-200',
+    dot: 'bg-violet-500',
+  },
+  Decommissioned: {
+    badge: 'bg-slate-100 text-slate-600 border-slate-300',
+    dot: 'bg-slate-400',
+  },
+};
+
+const DEFAULT_STATUS_STYLE = {
+  badge: 'bg-slate-50 text-slate-700 border-slate-200',
+  dot: 'bg-slate-400',
+};
+
+function getStatusStyle(status) {
+  return STATUS_STYLES[status] ?? DEFAULT_STATUS_STYLE;
+}
 
 const DEFAULT_VALUES = {
   item_id: '',
@@ -46,6 +89,7 @@ function ScrollableDropdown({
   getOptionValue = (item) => item.id,
   getOptionLabel = (item) => item.name,
   getOptionSubLabel = null,
+  getOptionBadgeClass = null,
   placeholder = 'Select option',
   searchPlaceholder = 'Type to filter...',
   disabled = false,
@@ -120,6 +164,11 @@ function ScrollableDropdown({
     setQuery('');
   };
 
+  const selectedStatusStyle =
+    selectedOption && getOptionBadgeClass
+      ? getStatusStyle(getOptionValue(selectedOption))
+      : null;
+
   return (
     <div ref={containerRef} className="relative">
       <button
@@ -134,8 +183,19 @@ function ScrollableDropdown({
             : 'bg-white text-slate-800 border-slate-200 hover:border-slate-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600'
         }`}
       >
-        <span className={`truncate ${!selectedOption ? 'text-slate-400' : 'font-medium'}`}>
-          {selectedOption ? getOptionLabel(selectedOption) : placeholder}
+        <span
+          className={`truncate flex items-center gap-2 ${
+            !selectedOption ? 'text-slate-400' : 'font-medium'
+          }`}
+        >
+          {selectedStatusStyle && (
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 ${selectedStatusStyle.dot}`}
+            />
+          )}
+          <span className="truncate">
+            {selectedOption ? getOptionLabel(selectedOption) : placeholder}
+          </span>
         </span>
         <ChevronDown
           className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-150 ${
@@ -184,6 +244,8 @@ function ScrollableDropdown({
                 const optionVal = String(rawVal ?? '');
                 const isSelected = optionVal !== '' && optionVal === String(value ?? '');
                 const subLabel = getOptionSubLabel ? getOptionSubLabel(item) : null;
+                const badgeClass = getOptionBadgeClass ? getOptionBadgeClass(item) : null;
+                const optionStatusStyle = badgeClass ? getStatusStyle(rawVal) : null;
 
                 return (
                   <button
@@ -197,8 +259,19 @@ function ScrollableDropdown({
                       isSelected ? 'bg-indigo-50/60 text-indigo-700 font-medium' : 'text-slate-700'
                     }`}
                   >
-                    <div className="min-w-0">
-                      <div className="truncate">{getOptionLabel(item)}</div>
+                    <div className="min-w-0 flex items-center gap-2">
+                      {badgeClass ? (
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${badgeClass}`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${optionStatusStyle.dot}`}
+                          />
+                          {getOptionLabel(item)}
+                        </span>
+                      ) : (
+                        <div className="truncate">{getOptionLabel(item)}</div>
+                      )}
                       {subLabel && (
                         <div className="text-[11px] text-slate-400 truncate">{subLabel}</div>
                       )}
@@ -346,6 +419,7 @@ export function AssetUnitModal({
   };
 
   const viewStatus = initialData?.status ?? initialData?.asset_status ?? 'Available';
+  const viewStatusStyle = getStatusStyle(viewStatus);
   const viewProperty =
     initialData?.current_property ??
     propertyList.find((p) => String(p.id) === String(initialData?.property_id))?.name ??
@@ -401,7 +475,10 @@ export function AssetUnitModal({
                   {initialData?.serial_number}
                 </span>
               </div>
-              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              <span
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${viewStatusStyle.badge}`}
+              >
+                <span className={`w-2 h-2 rounded-full ${viewStatusStyle.dot}`} />
                 {viewStatus}
               </span>
             </div>
@@ -510,6 +587,7 @@ export function AssetUnitModal({
                   value={data.status}
                   onChange={(val) => handleFieldChange('status', val || 'Available')}
                   options={statusOptions}
+                  getOptionBadgeClass={(opt) => getStatusStyle(opt.id).badge}
                   placeholder="Select Status..."
                   searchPlaceholder="Filter status..."
                   hasError={Boolean(errors.status)}

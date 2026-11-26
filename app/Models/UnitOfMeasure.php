@@ -12,6 +12,7 @@ class UnitOfMeasure extends Model
 
     protected $fillable = [
         'name',
+        'code',
         'descriptions',
     ];
 }

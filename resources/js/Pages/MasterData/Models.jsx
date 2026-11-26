@@ -24,6 +24,20 @@ function getPageNumbers(currentPage, totalPages) {
   return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
 }
 
+function getItemCountStyle(count) {
+  if (count > 0) {
+    return {
+      badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      icon: 'text-emerald-600',
+    };
+  }
+
+  return {
+    badge: 'bg-rose-50 text-rose-700 border-rose-200',
+    icon: 'text-rose-500',
+  };
+}
+
 export default function Models({ model = [], brands = [], itemmaster = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -39,7 +53,7 @@ export default function Models({ model = [], brands = [], itemmaster = [] }) {
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Count total items in itemmaster per model_id
-  const itemCountByModel = useMemo (() => {
+  const itemCountByModel = useMemo(() => {
     const list = Array.isArray(itemmaster) ? itemmaster : [];
     return list.reduce((counts, row) => {
       const modelId = row?.model_id ?? row?.model?.id;
@@ -222,53 +236,56 @@ export default function Models({ model = [], brands = [], itemmaster = [] }) {
                 {paginatedModels.length > 0 ? (
                   paginatedModels.map((item) => {
                     const associatedCounts = itemCountByModel[String(item.id)] ?? 0;
+                    const countStyle = getItemCountStyle(associatedCounts);
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/80 transition">
-                      <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-900">{item.name}</div>
-                        <div className="text-xs text-slate-400 font-mono">
-                          Brand: {item.brand?.name || 'N/A'}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                          <Layers className="w-3 h-3 text-slate-500" />
-                          {associatedCounts} {associatedCounts === 1 ? 'item' : 'items'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-slate-400">
-                        {formatDate(item.updated_at)}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenView(item)}
-                            title="View Model Details"
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-900">{item.name}</div>
+                          <div className="text-xs text-slate-400 font-mono">
+                            Brand: {item.brand?.name || 'N/A'}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${countStyle.badge}`}
                           >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(item)}
-                            title="Edit Model Record"
-                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDelete(item)}
-                            title="Delete Model"
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                            <Layers className={`w-3 h-3 ${countStyle.icon}`} />
+                            {associatedCounts} {associatedCounts === 1 ? 'item' : 'items'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-xs text-slate-400">
+                          {formatDate(item.updated_at)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenView(item)}
+                              title="View Model Details"
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(item)}
+                              title="Edit Model Record"
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDelete(item)}
+                              title="Delete Model"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
                     );
                   })
                 ) : (

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AssetUnits;
 use App\Models\Location;
 use App\Models\Property;
 use Illuminate\Http\Request;
@@ -13,10 +14,12 @@ class LocationController extends Controller {
 
     $locations = Location::with('property')->orderBy('name', 'ASC')->get();
     $properties= Property::orderBy('name', 'ASC')->get();
+    $serializedasset = AssetUnits::orderBy('item_id', 'ASC')->get();
 
     return Inertia::render('MasterData/Locations', [
         'location' => $locations,
         'property' => $properties,
+        'serializeasset' => $serializedasset
     ]);
 
     }

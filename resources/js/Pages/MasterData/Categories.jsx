@@ -24,6 +24,20 @@ function getPageNumbers(currentPage, totalPages) {
   return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
 }
 
+function getItemCountStyle(count) {
+  if (count > 0) {
+    return {
+      badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      icon: 'text-emerald-600',
+    };
+  }
+
+  return {
+    badge: 'bg-rose-50 text-rose-700 border-rose-200',
+    icon: 'text-rose-500',
+  };
+}
+
 export default function Categories({ category = [], itemmaster = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -207,6 +221,7 @@ export default function Categories({ category = [], itemmaster = [] }) {
                 {paginatedCategories.length > 0 ? (
                   paginatedCategories.map((item) => {
                     const associatedCount = itemCountByCategory[String(item.id)] ?? 0;
+                    const countStyle = getItemCountStyle(associatedCount);
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/80 transition">
@@ -214,8 +229,10 @@ export default function Categories({ category = [], itemmaster = [] }) {
                           <div className="font-semibold text-slate-900">{item.name}</div>
                         </td>
                         <td className="py-3.5 px-4">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                            <Layers className="w-3 h-3 text-slate-500" />
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${countStyle.badge}`}
+                          >
+                            <Layers className={`w-3 h-3 ${countStyle.icon}`} />
                             {associatedCount} {associatedCount === 1 ? 'item' : 'items'}
                           </span>
                         </td>

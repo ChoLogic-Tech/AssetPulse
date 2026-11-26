@@ -25,7 +25,21 @@ function getPageNumbers(currentPage, totalPages) {
   return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
 }
 
-export default function Locations({ location = [], property = [] }) {
+function getItemCountStyle(count) {
+  if (count > 0) {
+    return {
+      badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      icon: 'text-emerald-600',
+    };
+  }
+
+  return {
+    badge: 'bg-rose-50 text-rose-700 border-rose-200',
+    icon: 'text-rose-500',
+  };
+}
+
+export default function Locations({ location = [], property = [], serializeasset = [] }) {
   const { auth } = usePage().props;
   const user = auth?.user;
 
@@ -48,6 +62,19 @@ export default function Locations({ location = [], property = [] }) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [locationToDelete, setLocationToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Count total items in Assetunits per location_id
+  const ItemCountByAsset = useMemo(() => {
+    const list = Array.isArray(serializeasset) ? serializeasset : [];
+    return list.reduce((counts, row) => {
+      const serializedId = row?.location_id ?? row?.asset_units?.location_id;
+      if (serializedId !== undefined && serializedId !== null && serializedId !== '') {
+        const key = String(serializedId);
+        counts[key] = (counts[key] || 0) + 1;
+      }
+      return counts;
+    }, {});
+  }, [serializeasset]);
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -275,53 +302,60 @@ export default function Locations({ location = [], property = [] }) {
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {paginatedLocations.length > 0 ? (
-                  paginatedLocations.map((loc) => (
-                    <tr key={loc.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-900">{loc.name}</div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
-                          <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                          {loc.property?.name ?? loc.property_name ?? 'Central / Unassigned'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                          <Cpu className="w-3 h-3 text-slate-500" />
-                          {loc.asset_units_count ?? 0} units
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenView(loc)}
-                            title="View Location Details"
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition-colors"
+                  paginatedLocations.map((loc) => {
+                    const associatedCount = ItemCountByAsset[String(loc.id)] ?? 0;
+                    const countStyle = getItemCountStyle(associatedCount);
+
+                    return (
+                      <tr key={loc.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-900">{loc.name}</div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                            <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                            {loc.property?.name ?? loc.property_name ?? 'Central / Unassigned'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${countStyle.badge}`}
                           >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(loc)}
-                            title="Edit Location Record"
-                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition-colors"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDelete(loc)}
-                            title="Delete Location"
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                            <Cpu className={`w-3 h-3 ${countStyle.icon}`} />
+                            {associatedCount} {associatedCount === 1 ? 'item' : 'items'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenView(loc)}
+                              title="View Location Details"
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(loc)}
+                              title="Edit Location Record"
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition-colors"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDelete(loc)}
+                              title="Delete Location"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="4" className="py-8 text-center text-slate-400 text-sm">

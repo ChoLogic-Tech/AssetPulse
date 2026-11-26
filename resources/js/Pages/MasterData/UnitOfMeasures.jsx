@@ -111,8 +111,10 @@ export default function UnitOfMeasures({ unitofmeasures = [] }) {
   const uomList = Array.isArray(unitofmeasures) ? unitofmeasures : [];
 
   const filteredUoms = uomList.filter((oum) => {
+    const code = oum.code ?? '';
     const desc = oum.description ?? oum.descriptions ?? '';
     return (
+      code.toLowerCase().includes(normalizedQuery) ||
       oum.name?.toLowerCase().includes(normalizedQuery) ||
       desc.toLowerCase().includes(normalizedQuery)
     );
@@ -144,7 +146,7 @@ export default function UnitOfMeasures({ unitofmeasures = [] }) {
               Units of Measure Masterlist
             </h1>
             <p className="text-sm text-slate-500">
-              Manage standardized units of measure (e.g., PCS, BOX, UNIT) used for item master records.
+              Manage standardized units of measure (e.g., PC, BOX, UNIT) used for item master records.
             </p>
           </div>
           <button
@@ -165,7 +167,7 @@ export default function UnitOfMeasures({ unitofmeasures = [] }) {
               type="text"
               value={searchQuery}
               onChange={handleSearchChange}
-              placeholder="Search unit name or description..."
+              placeholder="Search code, unit name, or description..."
               className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
             />
           </div>
@@ -198,6 +200,7 @@ export default function UnitOfMeasures({ unitofmeasures = [] }) {
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-100 text-slate-600 uppercase text-xs font-semibold tracking-wider border-b border-slate-200">
                 <tr>
+                  <th className="py-3.5 px-4">Code</th>
                   <th className="py-3.5 px-4">Unit Name</th>
                   <th className="py-3.5 px-4">Description</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
@@ -211,7 +214,12 @@ export default function UnitOfMeasures({ unitofmeasures = [] }) {
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/80 transition">
                         <td className="py-3.5 px-4">
-                          <div className="font-semibold text-slate-900 font-mono">{item.name}</div>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-mono font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            {item.code || '—'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-900">{item.name}</div>
                         </td>
                         <td className="py-3.5 px-4 text-xs text-slate-600">
                           {desc || <span className="text-slate-400 italic">No description</span>}
@@ -249,7 +257,7 @@ export default function UnitOfMeasures({ unitofmeasures = [] }) {
                   })
                 ) : (
                   <tr>
-                    <td colSpan="3" className="py-8 text-center text-slate-400 text-sm">
+                    <td colSpan="4" className="py-8 text-center text-slate-400 text-sm">
                       No units of measure found. Click "+ Add New Unit of Measure" to create one.
                     </td>
                   </tr>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Search, Edit2, Trash2, Eye,
   Truck, Layers, AlertTriangle, Phone, Mail,
@@ -25,7 +25,21 @@ function getPageNumbers(currentPage, totalPages) {
   return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
 }
 
-export default function Supplier({ suppliers = [] }) {
+function getItemCountStyle(count) {
+  if (count > 0) {
+    return {
+      badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      icon: 'text-emerald-600',
+    };
+  }
+
+  return {
+    badge: 'bg-rose-50 text-rose-700 border-rose-200',
+    icon: 'text-rose-500',
+  };
+}
+
+export default function Supplier({ suppliers = [], itemmaster = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -38,6 +52,18 @@ export default function Supplier({ suppliers = [] }) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const itemCountBySupplier = useMemo(() => {
+    const list = Array.isArray(itemmaster) ? itemmaster : [];
+    return list.reduce((counts, row) => {
+      const supplierId = row?.supplier_id ?? row?.supplier?.id;
+      if (supplierId !== undefined && supplierId !== null && supplierId !== '') {
+        const key = String(supplierId);
+        counts[key] = (counts[key] || 0) + 1;
+      }
+      return counts;
+    }, {});
+  }, [itemmaster]);
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -196,63 +222,71 @@ export default function Supplier({ suppliers = [] }) {
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {paginatedVendors.length > 0 ? (
-                  paginatedVendors.map((supplier) => (
-                    <tr key={supplier.id} className="hover:bg-slate-50/80 transition">
-                      <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-900">{supplier.name}</div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="text-slate-800 font-medium">{supplier.contact_person}</div>
-                        <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
-                          <span className="flex items-center gap-1">
-                            <Mail className="w-3 h-3 text-slate-400" />
-                            {supplier.email}
+                  paginatedVendors.map((supplier) => {
+                    const associatedCount =
+                      supplier.items_count ?? itemCountBySupplier[String(supplier.id)] ?? 0;
+                    const countStyle = getItemCountStyle(associatedCount);
+
+                    return (
+                      <tr key={supplier.id} className="hover:bg-slate-50/80 transition">
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-900">{supplier.name}</div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="text-slate-800 font-medium">{supplier.contact_person}</div>
+                          <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
+                            <span className="flex items-center gap-1">
+                              <Mail className="w-3 h-3 text-slate-400" />
+                              {supplier.email}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              {supplier.phone_number}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${countStyle.badge}`}
+                          >
+                            <Layers className={`w-3 h-3 ${countStyle.icon}`} />
+                            {associatedCount} {associatedCount === 1 ? 'item' : 'items'}
                           </span>
-                          <span className="flex items-center gap-1">
-                            <Phone className="w-3 h-3 text-slate-400" />
-                            {supplier.phone_number}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                          <Layers className="w-3 h-3 text-slate-500" />
-                          {supplier.items_count || 0} items
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-slate-400">
-                        {supplier.updated_at}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenView(supplier)}
-                            title="View Vendor Details"
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(supplier)}
-                            title="Edit Vendor Record"
-                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDelete(supplier)}
-                            title="Delete Vendor"
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="py-3.5 px-4 text-xs text-slate-400">
+                          {supplier.updated_at}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenView(supplier)}
+                              title="View Vendor Details"
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(supplier)}
+                              title="Edit Vendor Record"
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDelete(supplier)}
+                              title="Delete Vendor"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="5" className="py-8 text-center text-slate-400 text-sm">
