@@ -16,33 +16,82 @@ use App\Http\Controllers\UomController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WarehouseController;
 use App\Http\Controllers\WarehouseStockInController;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-// 1. Root redirect based on auth status
+// Home entry: logged-in -> dashboard, guest -> login
 Route::get('/', function () {
     return Auth::check() ? redirect()->route('dashboard') : redirect()->route('login');
 });
 
-// Routes for guests only (If logged in, Laravel automatically redirects to dashboard)
+// Guest routes
 Route::middleware('guest')->group(function () {
-    // Show the login page (GET)
+    // Login page (blocked during maintenance mode by EnsureMaintenanceMode)
     Route::get('/login', function () {
         return Inertia::render('Auth/Login');
     })->name('login');
 
-    // Handle the login submission (POST)
+    // Dedicated login page opened from the Maintenance page's Authorized Login button
+    Route::get('/maintenance-login', function () {
+        return Inertia::render('Auth/Login', [
+            'maintenanceMode' => filter_var(config('app.maintenance_mode', false), FILTER_VALIDATE_BOOLEAN),
+        ]);
+    })->name('maintenance.login');
+
+    // Login handler (accepts email or username)
     Route::post('/login', function (Request $request) {
         $credentials = $request->validate([
             'login' => ['required', 'string'],
             'password' => ['required', 'string'],
         ]);
 
-        $fieldType = filter_var($credentials['login'], FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+        // Check if input is an email, otherwise treat as username
+        $loginValue = trim($credentials['login']);
+        $fieldType = filter_var($loginValue, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
 
-        if (Auth::attempt([$fieldType => $credentials['login'], 'password' => $credentials['password']], $request->boolean('remember'))) {
+        $maintenanceEnabled = filter_var(
+            config('app.maintenance_mode', false),
+            FILTER_VALIDATE_BOOLEAN
+        );
+
+        if ($maintenanceEnabled) {
+            $candidate = User::where($fieldType, $loginValue)->first();
+
+            // Only Super Admin (role_id = 1) or explicitly allowlisted emails can sign in
+            $allowedRoleIds = [1];
+            $allowedEmails = array_map(
+                static fn (string $email): string => strtolower(trim($email)),
+                array_filter(explode(',', (string) config('app.maintenance_allowed_emails', '')))
+            );
+
+            $isAllowed = $candidate
+                && (
+                    (isset($candidate->role_id) && in_array((int) $candidate->role_id, $allowedRoleIds, true))
+                    || (! empty($candidate->email) && in_array(strtolower($candidate->email), $allowedEmails, true))
+                );
+
+            Log::info('Maintenance POST /login attempt', [
+                'fieldType' => $fieldType,
+                'loginValue' => $loginValue,
+                'candidate_id' => $candidate?->id,
+                'candidate_role_id' => $candidate?->role_id,
+                'candidate_email' => $candidate?->email,
+                'allowedEmails' => $allowedEmails,
+                'isAllowed' => $isAllowed,
+            ]);
+
+            if (! $isAllowed) {
+                return back()->withErrors([
+                    'login' => 'System is under maintenance. Only Super Admin and authorized users can sign in right now.',
+                ]);
+            }
+        }
+
+        if (Auth::attempt([$fieldType => $loginValue, 'password' => $credentials['password']], $request->boolean('remember'))) {
             $request->session()->regenerate();
             return Inertia::location(route('dashboard'));
         }
@@ -53,15 +102,13 @@ Route::middleware('guest')->group(function () {
     });
 });
 
-// 4. Protected Routes (Requires Authentication & Session Validation)
+// Auth + verified routes
 Route::middleware(['auth', 'verified'])->group(function () {
 
-    // Dashboard Route
+    // Main dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // ==========================================
-    // INVENTORY MODULE ROUTES
-    // ==========================================
+    // Inventory pages
     Route::prefix('inventory')->name('inventory.')->group(function () {
         Route::get('/warehouse', [WarehouseController::class, 'index'])->name('warehouse');
 
@@ -76,9 +123,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('propertystockin.index');
     });
 
-    // ==========================================
-    // REQUISITIONS ROUTES
-    // ==========================================
+    // Requisitions pages
     Route::prefix('requisitions')->name('requisitions.')->group(function () {
         Route::get('/index', function () {
             return Inertia::render('Requisitions/Index');
@@ -93,16 +138,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         })->name('create');
     });
 
-    // ==========================================
-    // REPORTS ROUTES
-    // ==========================================
+    // Reports
     Route::get('/reports', function () {
         return Inertia::render('Reports/Index');
     })->name('reports.index');
 
-    // ==========================================
-    // MASTER DATA MODULE ROUTES (Sidebar Group)
-    // ==========================================
+    // Master data pages
     Route::prefix('master-data')->name('master-data.')->group(function () {
         Route::get('/itemmaster', [ItemMasterController::class, 'index'])->name('item_masterlist.index');
         Route::get('/assetunits', [AssetUnitController::class, 'index'])->name('assetunits.index');
@@ -115,22 +156,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
     });
 
-    // ==========================================
-    // AUDIT TRAIL & SETTINGS ROUTES
-    // ==========================================
+    // Audit trail
     Route::get('/audit-trail', function () {
         return Inertia::render('AuditTrail/Index');
     })->name('audit-trail');
 
+    // Settings pages
     Route::prefix('settings')->name('settings.')->group(function () {
         Route::get('/users', [UserController::class, 'index'])->name('users.index');
         Route::get('/rolesandpermissions', [RoleController::class, 'index'])->name('roles.index');
         Route::get('/properties', [PropertyController::class, 'index'])->name('properties.index');
     });
 
-    // ==========================================
-    // AUTHENTICATION MANAGEMENT
-    // ==========================================
+    // Logout
     Route::post('/logout', function (Request $request) {
         Auth::logout();
 
@@ -140,11 +178,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return redirect()->route('login');
     })->name('logout');
 
-    // ==========================================
-    // MUTATION / RESOURCE ROUTES
-    // ==========================================
+    // Form / API actions (POST, PUT, DELETE)
     Route::prefix('warehouseparstocks')->name('warehouseparstocks.')->group(function () {
-    Route::put('/{mainInventoryId}', [WarehouseController::class, 'updateParstock'])->name('update');
+        Route::put('/{mainInventoryId}', [WarehouseController::class, 'updateParstock'])->name('update');
     });
 
     Route::prefix('warehousestockins')->name('warehousestockins.')->group(function () {
@@ -155,8 +191,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::prefix('propertystockins')->name('propertystockins.')->group(function () {
         Route::post('/', [PropertyStockInController::class, 'store'])->name('store');
-        Route::put('/{propertystockin}', [PropertyStockInController::class, 'update'])->name('update');
-        Route::delete('/{propertystockin}', [PropertyStockInController::class, 'destroy'])->name('destroy');
+        Route::put('/{propertockin}', [PropertyStockInController::class, 'update'])->name('update');
+        Route::delete('/{propertockin}', [PropertyStockInController::class, 'destroy'])->name('destroy');
     });
 
     Route::prefix('users')->name('users.')->group(function () {

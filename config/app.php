@@ -123,4 +123,19 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Custom Role/Email Maintenance Gate
+    |--------------------------------------------------------------------------
+    |
+    | Controls whether non-authorized users are blocked from logging in or
+    | accessing protected pages while still allowing authorized accounts through.
+    |
+    */
+
+    
+    'maintenance_mode' => env('APP_MAINTENANCE_MODE', false),
+
+    'maintenance_allowed_emails' => env('MAINTENANCE_ALLOWED_EMAILS'),
+
 ];
