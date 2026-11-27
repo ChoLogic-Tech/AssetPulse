@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ItemMasterlist;
-use App\Models\Category;
 use App\Models\Brand;
+use App\Models\Category;
+use App\Models\ItemMasterlist;
 use App\Models\Models;
 use App\Models\Sku;
 use App\Models\UnitOfMeasure;
@@ -52,7 +52,9 @@ class ItemMasterController extends Controller
             'item_name.unique' => 'This item name already exists for the selected brand.',
         ]);
 
-        ItemMasterlist::create($validated);
+        DB::transaction(function () use ($validated) {
+            ItemMasterlist::create($validated);
+        });
 
         return redirect()->back()->with('success', 'Item successfully created.');
     }
@@ -78,7 +80,9 @@ class ItemMasterController extends Controller
             'item_name.unique' => 'This item name already exists for the selected brand.',
         ]);
 
-        $itemmaster->update($validated);
+        DB::transaction(function () use ($itemmaster, $validated) {
+            $itemmaster->update($validated);
+        });
 
         return redirect()->back()->with('success', 'Item successfully updated.');
     }
@@ -94,7 +98,9 @@ class ItemMasterController extends Controller
             ]);
         }
 
-        $itemmaster->delete();
+        DB::transaction(function () use ($itemmaster) {
+            $itemmaster->delete();
+        });
 
         return redirect()->back()->with('success', 'Item successfully deleted.');
     }
@@ -112,23 +118,23 @@ class ItemMasterController extends Controller
     }
 
     private function uniqueItemBrandRule(int|string|null $brandId, string $itemName, ?int $ignoreId = null)
-{
-    $normalizedName = mb_strtolower(trim(preg_replace('/\s+/', ' ', $itemName)));
+    {
+        $normalizedName = mb_strtolower(trim(preg_replace('/\s+/', ' ', $itemName)));
 
-    $rule = Rule::unique('item_masterlist')->where(function ($query) use ($brandId, $normalizedName) {
-        $query->whereRaw('LOWER(TRIM(item_name)) = ?', [$normalizedName]);
+        $rule = Rule::unique('item_masterlist')->where(function ($query) use ($brandId, $normalizedName) {
+            $query->whereRaw('LOWER(TRIM(item_name)) = ?', [$normalizedName]);
 
-        if (is_null($brandId)) {
-            $query->whereNull('brand_id');
-        } else {
-            $query->where('brand_id', $brandId);
+            if (is_null($brandId)) {
+                $query->whereNull('brand_id');
+            } else {
+                $query->where('brand_id', $brandId);
+            }
+        });
+
+        if ($ignoreId !== null) {
+            $rule->ignore($ignoreId);
         }
-    });
 
-    if ($ignoreId !== null) {
-        $rule->ignore($ignoreId);
+        return $rule;
     }
-
-    return $rule;
-}
 }

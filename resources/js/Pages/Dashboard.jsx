@@ -12,6 +12,8 @@ import DashboardQuickLinks from '@/Components/Dashboard/DashboardQuickLinks';
 import ParStockOverviewTable from '@/Components/Dashboard/ParStockOverviewTable';
 // Property & Central Warehouse serialized asset count breakdown card
 import PropertyDistributionCard from '@/Components/Dashboard/PropertyDistributionCard';
+// Pending requisitions and open stock transactions overview table
+import PendingTransactionsTable from '@/Components/Dashboard/PendingTransactionsTable';
 // Latest serialized asset units table with search, status filter, and status badge colors
 import DashboardAssetUnitsTable from '@/Components/Dashboard/DashboardAssetUnitsTable';
 // System audit trail log table component that renders filtered activity entries
@@ -65,6 +67,7 @@ export default function Dashboard({ dashboard = {} }) {
     suppliersCount = 0,
     parStock = [],
     lowStockItems = 0,
+    pendingTransactions = [],
     assetUnits = [],
     propertyDistribution = [],
     auditLogs = [],
@@ -108,7 +111,7 @@ export default function Dashboard({ dashboard = {} }) {
               IT Inventory &amp; Asset Dashboard
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Central warehouse par levels, serialized units, property distribution, and system audit trail
+              Central warehouse par levels, pending transactions, serialized units, property distribution, and audit trail
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -153,6 +156,9 @@ export default function Dashboard({ dashboard = {} }) {
             <ParStockOverviewTable parStock={parStock} />
             <PropertyDistributionCard propertyDistribution={propertyDistribution} />
           </div>
+
+          {/* Pending requisitions and open stock transactions overview table */}
+          <PendingTransactionsTable transactions={pendingTransactions} />
 
           {/* Serialized asset units overview table */}
           <DashboardAssetUnitsTable assetUnits={assetUnits} />
