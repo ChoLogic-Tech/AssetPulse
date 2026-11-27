@@ -13,8 +13,10 @@ use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
+    // Load dashboard metrics, central and property par stock overviews, asset counts, and audit logs
     public function index()
     {
+        // Load serialized asset units with item, property, room/location, and supplier labels
         $assetUnits = DB::table('asset_units as au')
             ->leftJoin('item_masterlist as im', 'au.item_id', '=', 'im.id')
             ->leftJoin('properties as p', 'au.property_id', '=', 'p.id')
@@ -38,6 +40,7 @@ class DashboardController extends Controller
             ->orderBy('au.serial_number', 'ASC')
             ->get();
 
+        // Count serialized assets assigned to each property
         $propertyDistribution = Property::query()
             ->leftJoin('asset_units as au', 'properties.id', '=', 'au.property_id')
             ->select(
@@ -50,6 +53,7 @@ class DashboardController extends Controller
             ->orderBy('properties.name', 'ASC')
             ->get();
 
+        // Append unassigned (warehouse) serialized units as a "Central Warehouse" entry
         $warehouseCount = DB::table('asset_units')
             ->whereNull('property_id')
             ->count();
@@ -60,7 +64,7 @@ class DashboardController extends Controller
             'assets' => $warehouseCount,
         ]);
 
-        // Pull central warehouse stock + par levels from main_inventory (not property_inventory)
+        // Pull central warehouse stock and baseline par levels from main_inventory
         $parStock = DB::table('main_inventory as mi')
             ->join('item_masterlist as im', 'mi.item_id', '=', 'im.id')
             ->leftJoin('categories as c', 'im.category_id', '=', 'c.id')
@@ -82,12 +86,43 @@ class DashboardController extends Controller
             ->orderBy('im.item_name', 'ASC')
             ->get();
 
-        // Count items at or below par so the top metric card matches the table
+        // Count central warehouse items at or below par (only when parstock > 0 so unset items aren't flagged)
         $lowStockItems = DB::table('main_inventory')
+            ->where('parstock', '>', 0)
             ->whereColumn('qty', '<=', 'parstock')
             ->count();
 
-        // Lookup maps so old audit rows with raw IDs still show readable names
+        // Pull property inventory stock and baseline par levels from property_inventory
+        $propertyParStock = DB::table('property_inventory as pi')
+            ->join('properties as prop', 'pi.property_id', '=', 'prop.id')
+            ->join('item_masterlist as im', 'pi.item_id', '=', 'im.id')
+            ->leftJoin('categories as c', 'im.category_id', '=', 'c.id')
+            ->leftJoin('sku as s', 'im.sku_id', '=', 's.id')
+            ->select(
+                'pi.id',
+                'pi.property_id',
+                'pi.item_id',
+                'pi.rf_num',
+                'pi.previous_rf_num',
+                'prop.name as property_name',
+                's.sku_code as sku',
+                'im.item_name as name',
+                'c.name as category',
+                'pi.qty as currentStock',
+                'pi.parstock as parLevel',
+                'pi.last_updated'
+            )
+            ->orderBy('prop.name', 'ASC')
+            ->orderBy('im.item_name', 'ASC')
+            ->get();
+
+        // Count property items at or below their configured baseline parstock (parstock > 0)
+        $propertyLowStockItems = DB::table('property_inventory')
+            ->where('parstock', '>', 0)
+            ->whereColumn('qty', '<=', 'parstock')
+            ->count();
+
+        // Lookup maps so older audit log entries with raw IDs still display readable names
         $itemNames = DB::table('item_masterlist')->pluck('item_name', 'id');
         $propertyNames = DB::table('properties')->pluck('name', 'id');
 
@@ -111,44 +146,45 @@ class DashboardController extends Controller
             ->map(function ($log) use ($itemNames, $propertyNames) {
                 $desc = $log->description ?? '';
 
-                // Swap item_id=<n> with item name when present in older log rows
+                // Replace item_id=<n> with item name when present in older log text
                 $desc = preg_replace_callback('/\bitem_id=(\d+)/i', function ($m) use ($itemNames) {
                     $name = $itemNames[$m[1]] ?? null;
                     return $name ? "Item: {$name}" : "Item #{$m[1]}";
                 }, $desc);
 
-                // Swap property_id=<n> with property name when present in older log rows
+                // Replace property_id=<n> with property name when present in older log text
                 $desc = preg_replace_callback('/\bproperty_id=(\d+)/i', function ($m) use ($propertyNames) {
                     $name = $propertyNames[$m[1]] ?? null;
                     return $name ? "Property: {$name}" : "Property #{$m[1]}";
                 }, $desc);
 
-                // Clean up older property_id=NULL text and trailing actor tags
+                // Normalize older property_id=NULL text, trailing actor tags, and RF prefixes
                 $desc = preg_replace('/\bproperty_id=NULL\s*\(([^)]+)\)/i', '$1', $desc);
                 $desc = preg_replace('/\bproperty_id=NULL\b/i', 'Central Warehouse', $desc);
                 $desc = preg_replace('/\s*[—-]+\s*by\s+.*?\(#\d+\)\s*$/i', '', $desc);
                 $desc = str_replace(['rf_number=', 'qty='], ['RF #', 'Qty: '], $desc);
-
-                // Collapse accidental double "RF #RF-" in older or raw descriptions
                 $desc = preg_replace('/\bRF\s*#\s*RF[-#\s]*/i', 'RF #', $desc);
 
                 $log->description = trim($desc);
                 return $log;
             });
 
+        // Pass all existing dashboard data plus property parstock metrics and rows to Inertia
         return Inertia::render('Dashboard', [
             'dashboard' => [
-                'totalAssets'          => AssetUnits::count(),
-                'pendingRequests'      => 7, // matched plural key
-                'totalMasterlist'      => ItemMasterlist::count(),
-                'categoriesCount'      => Category::count(),
-                'brandsCount'          => Brand::count(),
-                'suppliersCount'       => Supplier::count(),
-                'parStock'             => $parStock,
-                'lowStockItems'        => $lowStockItems,
-                'assetUnits'           => $assetUnits,
-                'propertyDistribution' => $propertyDistribution,
-                'auditLogs'            => $auditLogs,
+                'totalAssets'           => AssetUnits::count(),
+                'pendingRequests'       => 7,
+                'totalMasterlist'       => ItemMasterlist::count(),
+                'categoriesCount'       => Category::count(),
+                'brandsCount'           => Brand::count(),
+                'suppliersCount'        => Supplier::count(),
+                'parStock'              => $parStock,
+                'lowStockItems'         => $lowStockItems,
+                'propertyParStock'      => $propertyParStock,
+                'propertyLowStockItems' => $propertyLowStockItems,
+                'assetUnits'            => $assetUnits,
+                'propertyDistribution'  => $propertyDistribution,
+                'auditLogs'             => $auditLogs,
             ],
         ]);
     }

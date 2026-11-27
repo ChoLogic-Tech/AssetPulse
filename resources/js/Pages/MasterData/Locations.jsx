@@ -9,6 +9,7 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { LocationModal } from '@/Components/Modals/LocationModal';
 import { toast } from 'sonner';
 
+// Build pagination page numbers with ellipsis for larger lists
 function getPageNumbers(currentPage, totalPages) {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -25,6 +26,7 @@ function getPageNumbers(currentPage, totalPages) {
   return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
 }
 
+// Style count badges depending on whether there are linked assets
 function getItemCountStyle(count) {
   if (count > 0) {
     return {
@@ -43,6 +45,7 @@ export default function Locations({ location = [], property = [], serializeasset
   const { auth } = usePage().props;
   const user = auth?.user;
 
+  // Admins or warehouse-capable users can view/filter across all properties
   const canSelectAnyProperty = Boolean(
     user?.can_select_warehouse || user?.role_name === 'Admin' || user?.role_id === 1
   );
@@ -58,23 +61,47 @@ export default function Locations({ location = [], property = [], serializeasset
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit' | 'view'
 
-  // Delete Confirmation Modal States
+  // Delete confirmation modal state
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [locationToDelete, setLocationToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Count total items in Assetunits per location_id
-  const ItemCountByAsset = useMemo(() => {
-    const list = Array.isArray(serializeasset) ? serializeasset : [];
-    return list.reduce((counts, row) => {
-      const serializedId = row?.location_id ?? row?.asset_units?.location_id;
-      if (serializedId !== undefined && serializedId !== null && serializedId !== '') {
-        const key = String(serializedId);
-        counts[key] = (counts[key] || 0) + 1;
+  // Map location_id -> location record so we can resolve property_id if missing on an asset row
+  const locationById = useMemo(() => {
+    const list = Array.isArray(location) ? location : [];
+    return list.reduce((map, loc) => {
+      if (loc?.id !== undefined && loc?.id !== null) {
+        map[String(loc.id)] = loc;
       }
-      return counts;
+      return map;
     }, {});
-  }, [serializeasset]);
+  }, [location]);
+
+  // Count serialized asset units per location_id and per property_id
+  const { itemCountByLocation, assetCountByProperty } = useMemo(() => {
+    const list = Array.isArray(serializeasset) ? serializeasset : [];
+    const byLocation = {};
+    const byProperty = {};
+
+    list.forEach((row) => {
+      const unit = row?.asset_units ?? row;
+      const locId = unit?.location_id;
+      const locRecord = locId !== undefined && locId !== null ? locationById[String(locId)] : null;
+      const propId = unit?.property_id ?? locRecord?.property_id;
+
+      if (locId !== undefined && locId !== null && String(locId) !== '') {
+        const locKey = String(locId);
+        byLocation[locKey] = (byLocation[locKey] || 0) + 1;
+      }
+
+      if (propId !== undefined && propId !== null && String(propId) !== '') {
+        const propKey = String(propId);
+        byProperty[propKey] = (byProperty[propKey] || 0) + 1;
+      }
+    });
+
+    return { itemCountByLocation: byLocation, assetCountByProperty: byProperty };
+  }, [serializeasset, locationById]);
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -119,6 +146,7 @@ export default function Locations({ location = [], property = [], serializeasset
     setIsDeleteModalOpen(true);
   };
 
+  // Delete selected location via Inertia and display toast feedback
   const confirmDelete = () => {
     if (!locationToDelete) return;
 
@@ -146,11 +174,13 @@ export default function Locations({ location = [], property = [], serializeasset
     });
   };
 
+  // Restrict available properties to user's assigned property unless permitted to view all
   const visibleProperties = useMemo(() => {
     if (canSelectAnyProperty) return property;
     return property.filter((p) => String(p.id) === String(user?.property_id));
   }, [property, canSelectAnyProperty, user?.property_id]);
 
+  // Filter locations by user property scope, search text, and selected property filter
   const filteredLocations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
@@ -182,6 +212,29 @@ export default function Locations({ location = [], property = [], serializeasset
     });
   }, [location, canSelectAnyProperty, user?.property_id, searchQuery, selectedPropertyFilter]);
 
+  // Compute total assets assigned to the active property filter (or across visible properties)
+  const activePropertyAssetSummary = useMemo(() => {
+    if (selectedPropertyFilter) {
+      const matchedProp = visibleProperties.find(
+        (p) => String(p.id) === String(selectedPropertyFilter)
+      );
+      return {
+        label: matchedProp?.name ? `${matchedProp.name} Assets` : 'Property Assets',
+        count: Number(assetCountByProperty[String(selectedPropertyFilter)] ?? 0),
+      };
+    }
+
+    const totalVisiblePropertyAssets = visibleProperties.reduce(
+      (sum, p) => sum + Number(assetCountByProperty[String(p.id)] ?? 0),
+      0
+    );
+
+    return {
+      label: canSelectAnyProperty ? 'All Properties Assets' : 'Your Property Assets',
+      count: totalVisiblePropertyAssets,
+    };
+  }, [selectedPropertyFilter, visibleProperties, assetCountByProperty, canSelectAnyProperty]);
+
   const totalItems = filteredLocations.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
 
@@ -200,12 +253,12 @@ export default function Locations({ location = [], property = [], serializeasset
     <AuthenticatedLayout pageTitle={['Master Data', 'Locations']}>
       <Head title="Locations" />
       <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-        {/* Header Section */}
+        {/* Page header and create action */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
               <MapPin className="w-6 h-6 text-indigo-600" />
-              Locations & Perimeter Masterlist
+              Locations &amp; Perimeter Masterlist
             </h1>
             <p className="text-sm text-slate-500">
               Manage branch-specific storage rooms, zones, and perimeter locations for serialized assets.
@@ -214,16 +267,16 @@ export default function Locations({ location = [], property = [], serializeasset
           <button
             type="button"
             onClick={handleOpenCreate}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-lg shadow-sm transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-lg shadow-sm transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Add New Location
           </button>
         </div>
 
-        {/* Filter and Search Bar */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col md:flex-row gap-3 justify-between items-center shadow-sm">
-          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+        {/* Filter, search, and property asset count bar */}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col lg:flex-row gap-3 justify-between items-center shadow-sm">
+          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
             <div className="relative w-full sm:w-72">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
@@ -243,7 +296,7 @@ export default function Locations({ location = [], property = [], serializeasset
                   type="button"
                   onClick={handleClearSearch}
                   aria-label="Clear search query"
-                  className="text-slate-400 hover:text-slate-600 absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded"
+                  className="text-slate-400 hover:text-slate-600 absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -254,19 +307,19 @@ export default function Locations({ location = [], property = [], serializeasset
               <select
                 value={selectedPropertyFilter}
                 onChange={handlePropertyFilterChange}
-                className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 bg-white outline-none focus:border-indigo-600"
+                className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 bg-white outline-none focus:border-indigo-600 cursor-pointer"
               >
                 <option value="">All Properties</option>
-                {visibleProperties.map((properties) => (
-                  <option key={properties.id} value={properties.id}>
-                    {properties.name}
+                {visibleProperties.map((prop) => (
+                  <option key={prop.id} value={prop.id}>
+                    {prop.name}
                   </option>
                 ))}
               </select>
             )}
           </div>
 
-          <div className="flex items-center gap-4 text-sm text-slate-500 font-medium">
+          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500 font-medium">
             <label className="inline-flex items-center gap-2">
               <span>Show</span>
               <select
@@ -283,12 +336,21 @@ export default function Locations({ location = [], property = [], serializeasset
 
             <div>
               Total Locations:{' '}
-              <span className="text-slate-800 font-bold">{totalItems}</span>
+              <span className="text-slate-800 font-bold tabular-nums">{totalItems}</span>
+            </div>
+
+            {/* Total serialized assets assigned to the selected/scoped property */}
+            <div className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50/80 border border-indigo-200/80 px-3 py-1 text-xs font-semibold text-indigo-800 tabular-nums">
+              <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+              <span>
+                {activePropertyAssetSummary.label}:{' '}
+                {activePropertyAssetSummary.count.toLocaleString()}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Locations Table */}
+        {/* Locations table */}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -303,7 +365,11 @@ export default function Locations({ location = [], property = [], serializeasset
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {paginatedLocations.length > 0 ? (
                   paginatedLocations.map((loc) => {
-                    const associatedCount = ItemCountByAsset[String(loc.id)] ?? 0;
+                    const associatedCount = itemCountByLocation[String(loc.id)] ?? 0;
+                    const propertyTotalAssets =
+                      loc.property_id !== null && loc.property_id !== undefined
+                        ? Number(assetCountByProperty[String(loc.property_id)] ?? 0)
+                        : null;
                     const countStyle = getItemCountStyle(associatedCount);
 
                     return (
@@ -312,14 +378,20 @@ export default function Locations({ location = [], property = [], serializeasset
                           <div className="font-semibold text-slate-900">{loc.name}</div>
                         </td>
                         <td className="py-3.5 px-4">
-                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                          <div className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
                             <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                            {loc.property?.name ?? loc.property_name ?? 'Central / Unassigned'}
-                          </span>
+                            <span>{loc.property?.name ?? loc.property_name ?? 'Central / Unassigned'}</span>
+                          </div>
+                          {propertyTotalAssets !== null && (
+                            <div className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
+                              {propertyTotalAssets.toLocaleString()}{' '}
+                              {propertyTotalAssets === 1 ? 'asset' : 'assets'} in property
+                            </div>
+                          )}
                         </td>
                         <td className="py-3.5 px-4">
                           <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${countStyle.badge}`}
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border tabular-nums ${countStyle.badge}`}
                           >
                             <Cpu className={`w-3 h-3 ${countStyle.icon}`} />
                             {associatedCount} {associatedCount === 1 ? 'item' : 'items'}
@@ -331,7 +403,7 @@ export default function Locations({ location = [], property = [], serializeasset
                               type="button"
                               onClick={() => handleOpenView(loc)}
                               title="View Location Details"
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
                             >
                               <Eye className="w-4 h-4" />
                             </button>
@@ -339,7 +411,7 @@ export default function Locations({ location = [], property = [], serializeasset
                               type="button"
                               onClick={() => handleOpenEdit(loc)}
                               title="Edit Location Record"
-                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
@@ -347,7 +419,7 @@ export default function Locations({ location = [], property = [], serializeasset
                               type="button"
                               onClick={() => handleOpenDelete(loc)}
                               title="Delete Location"
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -367,7 +439,7 @@ export default function Locations({ location = [], property = [], serializeasset
             </table>
           </div>
 
-          {/* Pagination Footer */}
+          {/* Pagination footer */}
           {totalItems > 0 && (
             <div className="px-4 py-3 bg-slate-50/70 border-t border-slate-200 flex flex-col sm:flex-row gap-3 items-center justify-between text-xs text-slate-600">
               <div>
@@ -381,7 +453,7 @@ export default function Locations({ location = [], property = [], serializeasset
                   type="button"
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                   Prev
@@ -400,7 +472,7 @@ export default function Locations({ location = [], property = [], serializeasset
                       key={page}
                       type="button"
                       onClick={() => setCurrentPage(page)}
-                      className={`min-w-[32px] px-2.5 py-1.5 rounded-lg border font-medium transition ${
+                      className={`min-w-[32px] px-2.5 py-1.5 rounded-lg border font-medium transition cursor-pointer ${
                         currentPage === page
                           ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm'
                           : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
@@ -415,7 +487,7 @@ export default function Locations({ location = [], property = [], serializeasset
                   type="button"
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
                 >
                   Next
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -425,7 +497,7 @@ export default function Locations({ location = [], property = [], serializeasset
           )}
         </div>
 
-        {/* Location Modal Component */}
+        {/* Create / Edit / View location modal */}
         <LocationModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
@@ -436,7 +508,7 @@ export default function Locations({ location = [], property = [], serializeasset
           userPropertyId={user?.property_id ?? ''}
         />
 
-        {/* Custom Delete Confirmation Modal */}
+        {/* Delete confirmation modal */}
         {isDeleteModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -456,7 +528,7 @@ export default function Locations({ location = [], property = [], serializeasset
                   <button
                     type="button"
                     onClick={() => setIsDeleteModalOpen(false)}
-                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -464,7 +536,7 @@ export default function Locations({ location = [], property = [], serializeasset
                     type="button"
                     disabled={isDeleting}
                     onClick={confirmDelete}
-                    className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-colors disabled:opacity-50"
+                    className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     {isDeleting ? 'Deleting...' : 'Yes, Delete'}
                   </button>

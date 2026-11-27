@@ -9,6 +9,7 @@ import { Head, router } from '@inertiajs/react';
 import { SupplierModal } from '@/Components/Modals/SupplierModal';
 import { toast } from 'sonner';
 
+// Build pagination page numbers with ellipsis for larger lists
 function getPageNumbers(currentPage, totalPages) {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -25,6 +26,7 @@ function getPageNumbers(currentPage, totalPages) {
   return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
 }
 
+// Style the associated items pill based on whether a supplier has linked items
 function getItemCountStyle(count) {
   if (count > 0) {
     return {
@@ -40,19 +42,22 @@ function getItemCountStyle(count) {
 }
 
 export default function Supplier({ suppliers = [], itemmaster = [] }) {
+  // Search and pagination state
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
 
+  // Create / Edit / View modal state
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit' | 'view'
 
-  // Delete Confirmation Modal States
+  // Delete confirmation modal state
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Count masterlist items per supplier_id as a fallback if items_count is not pre-aggregated
   const itemCountBySupplier = useMemo(() => {
     const list = Array.isArray(itemmaster) ? itemmaster : [];
     return list.reduce((counts, row) => {
@@ -64,6 +69,35 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
       return counts;
     }, {});
   }, [itemmaster]);
+
+  // Helper to resolve associated item count for a single supplier record
+  const getSupplierItemCount = (supplier) => {
+    if (supplier?.items_count !== undefined && supplier?.items_count !== null) {
+      return Number(supplier.items_count) || 0;
+    }
+    return Number(itemCountBySupplier[String(supplier?.id)] ?? 0);
+  };
+
+  // Compute overall associated items across all suppliers (or itemmaster when suppliers lack items_count)
+  const overallAssociatedItemsCount = useMemo(() => {
+    const vendorList = Array.isArray(suppliers) ? suppliers : [];
+    const hasPrecomputedCounts = vendorList.some(
+      (s) => s?.items_count !== undefined && s?.items_count !== null
+    );
+
+    if (hasPrecomputedCounts) {
+      return vendorList.reduce((sum, s) => sum + (Number(s.items_count) || 0), 0);
+    }
+
+    if (Array.isArray(itemmaster) && itemmaster.length > 0) {
+      return itemmaster.filter((row) => {
+        const supplierId = row?.supplier_id ?? row?.supplier?.id;
+        return supplierId !== undefined && supplierId !== null && supplierId !== '';
+      }).length;
+    }
+
+    return Object.values(itemCountBySupplier).reduce((sum, n) => sum + n, 0);
+  }, [suppliers, itemmaster, itemCountBySupplier]);
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -98,6 +132,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
     setIsDeleteModalOpen(true);
   };
 
+  // Delete selected supplier via Inertia and show toast feedback
   const confirmDelete = () => {
     if (!supplierToDelete) return;
 
@@ -126,12 +161,18 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
     });
   };
 
+  // Filter suppliers by company name, contact person, or email
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredVendors = (Array.isArray(suppliers) ? suppliers : []).filter((supplier) =>
     supplier.name?.toLowerCase().includes(normalizedQuery) ||
     supplier.contact_person?.toLowerCase().includes(normalizedQuery) ||
     supplier.email?.toLowerCase().includes(normalizedQuery)
   );
+
+  // Sum associated items across the currently filtered suppliers as well
+  const filteredAssociatedItemsCount = useMemo(() => {
+    return filteredVendors.reduce((sum, supplier) => sum + getSupplierItemCount(supplier), 0);
+  }, [filteredVendors, itemCountBySupplier]);
 
   const totalItems = filteredVendors.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
@@ -151,7 +192,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
     <AuthenticatedLayout pageTitle={['Master Data', 'Vendors & Suppliers']}>
       <Head title="Vendors & Suppliers" />
       <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-        {/* Header Section */}
+        {/* Page header and create action */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -165,16 +206,16 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
           <button
             type="button"
             onClick={handleOpenCreate}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-lg shadow-sm transition"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-lg shadow-sm transition cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Add New Vendor/Supplier
           </button>
         </div>
 
-        {/* Filter and Search Bar */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col md:flex-row gap-3 justify-between items-center shadow-sm">
-          <div className="relative w-full md:w-80">
+        {/* Filter, pagination size, and overall count bar */}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col lg:flex-row gap-3 justify-between items-center shadow-sm">
+          <div className="relative w-full lg:w-80">
             <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
             <input
               type="text"
@@ -185,7 +226,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
             />
           </div>
 
-          <div className="flex items-center gap-4 text-sm text-slate-500 font-medium">
+          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500 font-medium">
             <label className="inline-flex items-center gap-2">
               <span>Show</span>
               <select
@@ -202,12 +243,21 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
 
             <div>
               Total Vendors:{' '}
-              <span className="text-slate-800 font-bold">{totalItems}</span>
+              <span className="text-slate-800 font-bold tabular-nums">{totalItems}</span>
+            </div>
+
+            {/* Overall associated items count across all suppliers (or filtered subset when searching) */}
+            <div className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50/80 border border-indigo-200/80 px-3 py-1 text-xs font-semibold text-indigo-800 tabular-nums">
+              <Layers className="w-3.5 h-3.5 text-indigo-600" />
+              <span>
+                Overall Associated Items:{' '}
+                {(normalizedQuery ? filteredAssociatedItemsCount : overallAssociatedItemsCount).toLocaleString()}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Vendors Table */}
+        {/* Vendors directory table */}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -223,8 +273,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {paginatedVendors.length > 0 ? (
                   paginatedVendors.map((supplier) => {
-                    const associatedCount =
-                      supplier.items_count ?? itemCountBySupplier[String(supplier.id)] ?? 0;
+                    const associatedCount = getSupplierItemCount(supplier);
                     const countStyle = getItemCountStyle(associatedCount);
 
                     return (
@@ -247,7 +296,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
                         </td>
                         <td className="py-3.5 px-4">
                           <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${countStyle.badge}`}
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border tabular-nums ${countStyle.badge}`}
                           >
                             <Layers className={`w-3 h-3 ${countStyle.icon}`} />
                             {associatedCount} {associatedCount === 1 ? 'item' : 'items'}
@@ -262,7 +311,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
                               type="button"
                               onClick={() => handleOpenView(supplier)}
                               title="View Vendor Details"
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition cursor-pointer"
                             >
                               <Eye className="w-4 h-4" />
                             </button>
@@ -270,7 +319,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
                               type="button"
                               onClick={() => handleOpenEdit(supplier)}
                               title="Edit Vendor Record"
-                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition"
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-md transition cursor-pointer"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
@@ -278,7 +327,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
                               type="button"
                               onClick={() => handleOpenDelete(supplier)}
                               title="Delete Vendor"
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition cursor-pointer"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -298,7 +347,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
             </table>
           </div>
 
-          {/* Pagination Footer */}
+          {/* Pagination footer */}
           {totalItems > 0 && (
             <div className="px-4 py-3 bg-slate-50/70 border-t border-slate-200 flex flex-col sm:flex-row gap-3 items-center justify-between text-xs text-slate-600">
               <div>
@@ -312,7 +361,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
                   type="button"
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                   Prev
@@ -331,7 +380,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
                       key={page}
                       type="button"
                       onClick={() => setCurrentPage(page)}
-                      className={`min-w-[32px] px-2.5 py-1.5 rounded-lg border font-medium transition ${
+                      className={`min-w-[32px] px-2.5 py-1.5 rounded-lg border font-medium transition cursor-pointer ${
                         currentPage === page
                           ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm'
                           : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
@@ -346,7 +395,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
                   type="button"
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
                 >
                   Next
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -356,7 +405,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
           )}
         </div>
 
-        {/* Vendor Modal Component */}
+        {/* Create / Edit / View supplier modal */}
         <SupplierModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
@@ -364,7 +413,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
           initialData={selectedSupplier}
         />
 
-        {/* Custom Delete Confirmation Modal */}
+        {/* Delete confirmation modal */}
         {isDeleteModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -384,7 +433,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
                   <button
                     type="button"
                     onClick={() => setIsDeleteModalOpen(false)}
-                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -392,7 +441,7 @@ export default function Supplier({ suppliers = [], itemmaster = [] }) {
                     type="button"
                     disabled={isDeleting}
                     onClick={confirmDelete}
-                    className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-50"
+                    className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-50 cursor-pointer"
                   >
                     {isDeleting ? 'Deleting...' : 'Yes, Delete'}
                   </button>

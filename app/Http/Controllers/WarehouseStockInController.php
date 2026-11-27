@@ -12,6 +12,7 @@ use Inertia\Inertia;
 
 class WarehouseStockInController extends Controller
 {
+    // Load warehouse/property stock-in logs, central inventory balances, and dropdown data
     public function index(Request $request)
     {
         $search = trim((string) $request->input('search', ''));
@@ -159,6 +160,7 @@ class WarehouseStockInController extends Controller
         ]);
     }
 
+    // Create a new warehouse or property stock-in entry and record a clean audit log
     public function store(Request $request)
     {
         $normalized = $this->normalizePayload($request);
@@ -206,7 +208,7 @@ class WarehouseStockInController extends Controller
                 actionType: 'STOCK_IN_CREATE',
                 recordId: (int) $stockIn->id,
                 description: sprintf(
-                    'Stocked in %d pcs of %s%s at %s (%s%s, Stock-in table #%d)',
+                    'Stocked in %d pcs of %s%s at %s — %s%s, Stock-in table #%d',
                     $validated['quantity'],
                     $itemName,
                     $serialSuffix,
@@ -221,6 +223,7 @@ class WarehouseStockInController extends Controller
         return back()->with('success', 'Stock-in recorded successfully.');
     }
 
+    // Update an existing stock-in entry, adjust inventory/serials, and record a clean audit log
     public function update(Request $request, int $warehousestockin)
     {
         $stockIn = WarehouseStockin::findOrFail($warehousestockin);
@@ -286,7 +289,7 @@ class WarehouseStockInController extends Controller
                 actionType: 'STOCK_IN_UPDATE',
                 recordId: $stockInId,
                 description: sprintf(
-                    'Updated stock-in table #%d: %s%s at %s (%s, %d pcs) -> %s%s at %s (%s, %d pcs)',
+                    'Updated stock-in table #%d: %s%s at %s — %s, %d pcs -> %s%s at %s — %s, %d pcs',
                     $stockInId,
                     $oldItemName,
                     $oldSerialSuffix,
@@ -305,6 +308,7 @@ class WarehouseStockInController extends Controller
         return back()->with('success', 'Stock-in updated successfully.');
     }
 
+    // Delete a stock-in entry, reverse stock/serials, and record a clean audit log
     public function destroy(int $warehousestockin)
     {
         $stockIn = WarehouseStockin::findOrFail($warehousestockin);
@@ -332,7 +336,7 @@ class WarehouseStockInController extends Controller
                 actionType: 'STOCK_IN_DELETE',
                 recordId: $stockInId,
                 description: sprintf(
-                    'Deleted stock-in table #%d: %d pcs of %s%s at %s (%s)',
+                    'Deleted stock-in table #%d: %d pcs of %s%s at %s — %s',
                     $stockInId,
                     $oldQty,
                     $oldItemName,
@@ -657,14 +661,23 @@ class WarehouseStockInController extends Controller
             ->all();
     }
 
-    // Format serial numbers as " (SN: A, B, C)" when present, or "" for bulk items
+    // Format serial numbers without parentheses or duplicate "SN:" prefix
     private function formatSerialSuffix(array $serials): string
     {
         if (empty($serials)) {
             return '';
         }
 
-        return ' (SN: ' . implode(', ', $serials) . ')';
+        $formatted = array_map(function ($serial) {
+            $clean = trim((string) $serial);
+            // Omit "SN:" prefix if the serial already starts with "SN-" or "SN "
+            if (preg_match('/^SN[-\s]/i', $clean)) {
+                return $clean;
+            }
+            return 'SN: ' . $clean;
+        }, $serials);
+
+        return ' — ' . implode(', ', $formatted);
     }
 
     private function getItemName(int $itemId): string
@@ -711,4 +724,4 @@ class WarehouseStockInController extends Controller
             'description' => $description,
         ]);
     }
-}   
+}

@@ -8,6 +8,7 @@ use App\Http\Controllers\ItemMasterController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\ModelController;
 use App\Http\Controllers\PropertyController;
+use App\Http\Controllers\PropertyInventoryController;
 use App\Http\Controllers\PropertyStockInController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SkuController;
@@ -23,33 +24,33 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-// Home entry: logged-in -> dashboard, guest -> login
+// Redirect authenticated users to dashboard and guests to login
 Route::get('/', function () {
     return Auth::check() ? redirect()->route('dashboard') : redirect()->route('login');
 });
 
-// Guest routes
+// Guest-only routes
 Route::middleware('guest')->group(function () {
-    // Login page (blocked during maintenance mode by EnsureMaintenanceMode)
+    // Standard login page
     Route::get('/login', function () {
         return Inertia::render('Auth/Login');
     })->name('login');
 
-    // Dedicated login page opened from the Maintenance page's Authorized Login button
+    // Login page opened from maintenance mode screen
     Route::get('/maintenance-login', function () {
         return Inertia::render('Auth/Login', [
             'maintenanceMode' => filter_var(config('app.maintenance_mode', false), FILTER_VALIDATE_BOOLEAN),
         ]);
     })->name('maintenance.login');
 
-    // Login handler (accepts email or username)
+    // Authenticate using email or username
     Route::post('/login', function (Request $request) {
         $credentials = $request->validate([
             'login' => ['required', 'string'],
             'password' => ['required', 'string'],
         ]);
 
-        // Check if input is an email, otherwise treat as username
+        // Detect whether login input is an email address or username
         $loginValue = trim($credentials['login']);
         $fieldType = filter_var($loginValue, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
 
@@ -58,10 +59,10 @@ Route::middleware('guest')->group(function () {
             FILTER_VALIDATE_BOOLEAN
         );
 
+        // Enforce Super Admin or allowlisted email access when maintenance mode is active
         if ($maintenanceEnabled) {
             $candidate = User::where($fieldType, $loginValue)->first();
 
-            // Only Super Admin (role_id = 1) or explicitly allowlisted emails can sign in
             $allowedRoleIds = [1];
             $allowedEmails = array_map(
                 static fn (string $email): string => strtolower(trim($email)),
@@ -102,22 +103,21 @@ Route::middleware('guest')->group(function () {
     });
 });
 
-// Auth + verified routes
+// Authenticated and verified routes
 Route::middleware(['auth', 'verified'])->group(function () {
 
     // Main dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Inventory pages
+    // Inventory monitor and stock-in pages
     Route::prefix('inventory')->name('inventory.')->group(function () {
         Route::get('/warehouse', [WarehouseController::class, 'index'])->name('warehouse');
 
         Route::get('/warehousestockin', [WarehouseStockInController::class, 'index'])
             ->name('warehousestockin.index');
 
-        Route::get('/propertyinventory', function () {
-            return Inertia::render('Inventory/PropertyInventory');
-        })->name('propertyinventory');
+        Route::get('/propertyinventory', [PropertyInventoryController::class, 'index'])
+            ->name('propertyinventory');
 
         Route::get('/propertystockin', [PropertyStockInController::class, 'index'])
             ->name('propertystockin.index');
@@ -138,7 +138,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         })->name('create');
     });
 
-    // Reports
+    // Reports page
     Route::get('/reports', function () {
         return Inertia::render('Reports/Index');
     })->name('reports.index');
@@ -156,7 +156,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
     });
 
-    // Audit trail
+    // Audit trail page
     Route::get('/audit-trail', function () {
         return Inertia::render('AuditTrail/Index');
     })->name('audit-trail');
@@ -168,7 +168,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/properties', [PropertyController::class, 'index'])->name('properties.index');
     });
 
-    // Logout
+    // Logout handler
     Route::post('/logout', function (Request $request) {
         Auth::logout();
 
@@ -178,35 +178,44 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return redirect()->route('login');
     })->name('logout');
 
-    // Form / API actions (POST, PUT, DELETE)
+    // Warehouse parstock update action
     Route::prefix('warehouseparstocks')->name('warehouseparstocks.')->group(function () {
         Route::put('/{mainInventoryId}', [WarehouseController::class, 'updateParstock'])->name('update');
     });
 
+    // Warehouse stock-in CRUD actions
     Route::prefix('warehousestockins')->name('warehousestockins.')->group(function () {
         Route::post('/', [WarehouseStockInController::class, 'store'])->name('store');
         Route::put('/{warehousestockin}', [WarehouseStockInController::class, 'update'])->name('update');
         Route::delete('/{warehousestockin}', [WarehouseStockInController::class, 'destroy'])->name('destroy');
     });
 
+    // Property parstock update action
+    Route::put('/propertyparstocks/{propertyInventoryId}', [PropertyInventoryController::class, 'updateParstock'])
+        ->name('propertyparstocks.update');
+
+    // Property stock-in CRUD actions (fixed {propertystockin} route parameter name)
     Route::prefix('propertystockins')->name('propertystockins.')->group(function () {
         Route::post('/', [PropertyStockInController::class, 'store'])->name('store');
-        Route::put('/{propertockin}', [PropertyStockInController::class, 'update'])->name('update');
-        Route::delete('/{propertockin}', [PropertyStockInController::class, 'destroy'])->name('destroy');
+        Route::put('/{propertystockin}', [PropertyStockInController::class, 'update'])->name('update');
+        Route::delete('/{propertystockin}', [PropertyStockInController::class, 'destroy'])->name('destroy');
     });
 
+    // Users CRUD actions
     Route::prefix('users')->name('users.')->group(function () {
         Route::post('/', [UserController::class, 'store'])->name('store');
         Route::put('/{user}', [UserController::class, 'update'])->name('update');
         Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy');
     });
 
+    // Roles CRUD actions
     Route::prefix('roles')->name('roles.')->group(function () {
         Route::post('/', [RoleController::class, 'store'])->name('store');
         Route::put('/{role}', [RoleController::class, 'update'])->name('update');
         Route::delete('/{role}', [RoleController::class, 'destroy'])->name('destroy');
     });
 
+    // Serialized asset units CRUD actions
     Route::prefix('assetunits')->name('assetunits.')->group(function () {
         Route::get('/', [AssetUnitController::class, 'index'])->name('index');
         Route::post('/', [AssetUnitController::class, 'store'])->name('store');
@@ -214,48 +223,56 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/{assetunit}', [AssetUnitController::class, 'destroy'])->name('destroy');
     });
 
+    // SKU CRUD actions
     Route::prefix('skus')->name('skus.')->group(function () {
         Route::post('/', [SkuController::class, 'store'])->name('store');
         Route::put('/{sku}', [SkuController::class, 'update'])->name('update');
         Route::delete('/{sku}', [SkuController::class, 'destroy'])->name('destroy');
     });
 
+    // Unit of measure CRUD actions
     Route::prefix('unitofmeasures')->name('unitofmeasures.')->group(function () {
         Route::post('/', [UomController::class, 'store'])->name('store');
         Route::put('/{unitofmeasure}', [UomController::class, 'update'])->name('update');
         Route::delete('/{unitofmeasure}', [UomController::class, 'destroy'])->name('destroy');
     });
 
+    // Categories CRUD actions
     Route::prefix('categories')->name('categories.')->group(function () {
         Route::post('/', [CategoryController::class, 'store'])->name('store');
         Route::put('/{category}', [CategoryController::class, 'update'])->name('update');
         Route::delete('/{category}', [CategoryController::class, 'destroy'])->name('destroy');
     });
 
+    // Brands CRUD actions
     Route::prefix('brands')->name('brands.')->group(function () {
         Route::post('/', [BrandController::class, 'store'])->name('store');
         Route::put('/{brand}', [BrandController::class, 'update'])->name('update');
         Route::delete('/{brand}', [BrandController::class, 'destroy'])->name('destroy');
     });
 
+    // Models CRUD actions
     Route::prefix('models')->name('models.')->group(function () {
         Route::post('/', [ModelController::class, 'store'])->name('store');
         Route::put('/{model}', [ModelController::class, 'update'])->name('update');
         Route::delete('/{model}', [ModelController::class, 'destroy'])->name('destroy');
     });
 
+    // Suppliers CRUD actions
     Route::prefix('suppliers')->name('suppliers.')->group(function () {
         Route::post('/', [SupplierController::class, 'store'])->name('store');
         Route::put('/{supplier}', [SupplierController::class, 'update'])->name('update');
         Route::delete('/{supplier}', [SupplierController::class, 'destroy'])->name('destroy');
     });
 
+    // Locations CRUD actions
     Route::prefix('locations')->name('locations.')->group(function () {
         Route::post('/', [LocationController::class, 'store'])->name('store');
         Route::put('/{location}', [LocationController::class, 'update'])->name('update');
         Route::delete('/{location}', [LocationController::class, 'destroy'])->name('destroy');
     });
 
+    // Item masterlist CRUD actions
     Route::prefix('itemmaster')->name('itemmaster.')->group(function () {
         Route::post('/', [ItemMasterController::class, 'store'])->name('store');
         Route::put('/{itemmaster}', [ItemMasterController::class, 'update'])->name('update');

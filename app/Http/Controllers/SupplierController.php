@@ -6,20 +6,43 @@ use App\Models\Supplier;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class SupplierController extends Controller
 {
+    // Load suppliers ordered by name with distinct associated item counts across stock-in logs and asset units
     public function index()
     {
-        $suppliers = Supplier::orderBy('name', 'ASC')->get();
+        $suppliers = Supplier::query()
+            ->select('suppliers.*')
+            // Count unique item_ids per supplier across both stock_in_logs and asset_units
+            ->selectSub(
+                DB::table(
+                    DB::raw('(
+                        SELECT item_id, supplier_id
+                        FROM stock_in_logs
+                        WHERE supplier_id IS NOT NULL AND item_id IS NOT NULL
+                        UNION
+                        SELECT item_id, supplier_id
+                        FROM asset_units
+                        WHERE supplier_id IS NOT NULL AND item_id IS NOT NULL
+                    ) as supplier_items')
+                )
+                    ->selectRaw('COUNT(DISTINCT item_id)')
+                    ->whereColumn('supplier_items.supplier_id', 'suppliers.id'),
+                'items_count'
+            )
+            ->orderBy('name', 'ASC')
+            ->get();
 
         return Inertia::render('MasterData/Suppliers', [
             'suppliers' => $suppliers,
         ]);
     }
 
+    // Validate and create a new supplier record
     public function store(Request $request)
     {
         $trimmedName = trim((string) $request->input('name'));
@@ -73,6 +96,7 @@ class SupplierController extends Controller
         return redirect()->back()->with('success', 'Supplier successfully created.');
     }
 
+    // Validate and update an existing supplier record
     public function update(Request $request, Supplier $supplier)
     {
         $trimmedName = trim((string) $request->input('name'));
@@ -128,6 +152,7 @@ class SupplierController extends Controller
         return redirect()->back()->with('success', 'Supplier successfully updated.');
     }
 
+    // Delete a supplier unless PostgreSQL foreign key constraints prevent deletion
     public function destroy(Supplier $supplier)
     {
         try {

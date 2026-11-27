@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// Import React hooks, icons, Inertia layout/head, and the central stock details + par stock modal
+import React, { useMemo, useState } from 'react';
 import {
   Search,
   Tag,
@@ -12,8 +13,11 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import { WarehouseItemModal } from '@/Components/Modals/WarehouseItemModal';
 
-const getRawUom = (record) => record?.uom_name || record?.uom || record?.uom_code || 'Unit';
+// Read UOM label from joined columns with fallback to 'Unit'
+const getRawUom = (record) =>
+  record?.uom_name || record?.uom || record?.uom_code || 'Unit';
 
+// Singularize or pluralize UOM label cleanly based on quantity count
 const pluralizeUom = (label, count) => {
   const clean = String(label || 'Unit').trim();
   if (!clean) return 'Units';
@@ -22,7 +26,7 @@ const pluralizeUom = (label, count) => {
   const isAllUpper = clean === clean.toUpperCase() && /[A-Z]/.test(clean);
   const lower = clean.toLowerCase();
 
-  // Already plural
+  // Keep words already ending in 's' unchanged (except 'ss', 'box', 'pcs')
   if (
     lower.endsWith('s') &&
     !lower.endsWith('ss') &&
@@ -31,7 +35,7 @@ const pluralizeUom = (label, count) => {
     return clean;
   }
 
-  // Words ending in x, s, z, ch, sh -> add es
+  // Add 'es' for sibilant endings
   if (
     lower.endsWith('x') ||
     lower.endsWith('z') ||
@@ -42,60 +46,73 @@ const pluralizeUom = (label, count) => {
     return isAllUpper ? `${clean}ES` : `${clean}es`;
   }
 
-  // Words like "piece" -> "pieces"
+  // Add 's' for words ending in 'ce'
   if (lower.endsWith('ce')) {
     return isAllUpper ? `${clean}S` : `${clean}s`;
   }
 
+  // Default plural form
   return isAllUpper ? `${clean}S` : `${clean}s`;
 };
 
+// Format count together with singular or plural UOM label
 const formatCountWithUom = (count, record) => {
   const num = Number(count ?? 0);
   const baseLabel = getRawUom(record);
   return `${num.toLocaleString()} ${pluralizeUom(baseLabel, num)}`;
 };
 
+// Central warehouse stock monitor page with details and baseline par stock modal
 export default function Warehouse({ mainInventory = [], categories = [] }) {
+  // Search query and category filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
+
+  // State for WarehouseItemModal (details + baseline par stock update)
   const [selectedItem, setSelectedItem] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Open modal for the selected warehouse inventory item
   const handleOpenParStockModal = (item) => {
     setSelectedItem(item);
     setIsModalOpen(true);
   };
 
+  // Close modal and clear selected item
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedItem(null);
   };
 
-  const filteredInventory = mainInventory.filter((record) => {
-    const q = searchQuery.toLowerCase();
-    const prevRf = record.previous_rf_num ?? record.prf_num ?? '';
-    const uomLabel = getRawUom(record);
-    const matchesSearch =
-      !q ||
-      record.item_name?.toLowerCase().includes(q) ||
-      record.sku?.toLowerCase().includes(q) ||
-      record.rf_num?.toLowerCase().includes(q) ||
-      String(prevRf).toLowerCase().includes(q) ||
-      uomLabel.toLowerCase().includes(q);
+  // Filter warehouse rows by search text and selected category
+  const filteredInventory = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
 
-    const matchesCategory = selectedCategoryFilter
-      ? String(record.category_id) === String(selectedCategoryFilter)
-      : true;
+    return mainInventory.filter((record) => {
+      const prevRf = record.previous_rf_num ?? record.prf_num ?? '';
+      const uomLabel = getRawUom(record);
 
-    return matchesSearch && matchesCategory;
-  });
+      const matchesSearch =
+        !q ||
+        record.item_name?.toLowerCase().includes(q) ||
+        record.sku?.toLowerCase().includes(q) ||
+        record.rf_num?.toLowerCase().includes(q) ||
+        String(prevRf).toLowerCase().includes(q) ||
+        uomLabel.toLowerCase().includes(q);
+
+      const matchesCategory = selectedCategoryFilter
+        ? String(record.category_id) === String(selectedCategoryFilter)
+        : true;
+
+      return matchesSearch && matchesCategory;
+    });
+  }, [mainInventory, searchQuery, selectedCategoryFilter]);
 
   return (
     <AuthenticatedLayout pageTitle={['Inventory', 'Warehouse', 'Central Stock Monitor']}>
       <Head title="Central Warehouse Stock" />
       <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-        {/* Header Section */}
+        {/* Page header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -108,7 +125,7 @@ export default function Warehouse({ mainInventory = [], categories = [] }) {
           </div>
         </div>
 
-        {/* Filter and Search Bar */}
+        {/* Search input and category filter */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col md:flex-row gap-3 justify-between items-center shadow-sm">
           <div className="relative w-full md:w-80">
             <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
@@ -121,11 +138,19 @@ export default function Warehouse({ mainInventory = [], categories = [] }) {
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+            <span className="text-xs font-medium text-slate-500 whitespace-nowrap">
+              Showing{' '}
+              <strong className="text-slate-800 tabular-nums">
+                {filteredInventory.length}
+              </strong>{' '}
+              {filteredInventory.length === 1 ? 'item' : 'items'}
+            </span>
+
             <select
               value={selectedCategoryFilter}
               onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-              className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 bg-white outline-none focus:border-indigo-600 w-full md:w-64"
+              className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 bg-white outline-none focus:border-indigo-600 w-full sm:w-60 cursor-pointer"
             >
               <option value="">All Categories</option>
               {categories.map((cat) => (
@@ -137,7 +162,7 @@ export default function Warehouse({ mainInventory = [], categories = [] }) {
           </div>
         </div>
 
-        {/* Main Warehouse Inventory Table (Mapping to main_inventory) */}
+        {/* Main warehouse inventory table */}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -158,8 +183,9 @@ export default function Warehouse({ mainInventory = [], categories = [] }) {
                   filteredInventory.map((record) => {
                     const qty = Number(record.qty ?? 0);
                     const parstock = Number(record.parstock ?? 0);
-                    const isLowStock = qty < parstock;
                     const isOutOfStock = qty === 0;
+                    // Flag low stock only when a baseline parstock (> 0) is set and qty is lower
+                    const isBelowParstock = parstock > 0 && qty < parstock;
                     const previousRf = record.previous_rf_num ?? record.prf_num;
 
                     return (
@@ -177,31 +203,33 @@ export default function Warehouse({ mainInventory = [], categories = [] }) {
                         <td className="py-3.5 px-4 font-mono text-xs text-slate-600">
                           {record.rf_num || 'N/A'}
                         </td>
-                        <td className="py-3.5 px-4 text-xs font-medium text-emerald-600">
+                        <td className="py-3.5 px-4 text-xs font-medium text-emerald-600 tabular-nums">
                           <div className="flex items-center gap-1">
-                            <ArrowDownLeft className="w-3.5 h-3.5" />+{record.stockin ?? 0}
+                            <ArrowDownLeft className="w-3.5 h-3.5" />+
+                            {Number(record.stockin ?? 0).toLocaleString()}
                           </div>
                         </td>
-                        <td className="py-3.5 px-4 text-xs font-medium text-amber-600">
+                        <td className="py-3.5 px-4 text-xs font-medium text-amber-600 tabular-nums">
                           <div className="flex items-center gap-1">
-                            <ArrowUpRight className="w-3.5 h-3.5" />-{record.stockout ?? 0}
+                            <ArrowUpRight className="w-3.5 h-3.5" />-
+                            {Number(record.stockout ?? 0).toLocaleString()}
                           </div>
                         </td>
                         <td className="py-3.5 px-4">
                           <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold tabular-nums ${
                               isOutOfStock
                                 ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                : isLowStock
+                                : isBelowParstock
                                 ? 'bg-amber-50 text-amber-700 border border-amber-200'
                                 : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                             }`}
                           >
-                            {isLowStock && <AlertTriangle className="w-3 h-3" />}
+                            {isBelowParstock && <AlertTriangle className="w-3 h-3" />}
                             {formatCountWithUom(qty, record)}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 font-mono text-xs text-slate-600">
+                        <td className="py-3.5 px-4 font-mono text-xs text-slate-600 tabular-nums">
                           {parstock > 0 ? (
                             formatCountWithUom(parstock, record)
                           ) : (
@@ -212,8 +240,8 @@ export default function Warehouse({ mainInventory = [], categories = [] }) {
                           <button
                             type="button"
                             onClick={() => handleOpenParStockModal(record)}
-                            title="Update Baseline Par Stock"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition"
+                            title="View Details & Update Baseline Par Stock"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
                           >
                             <SlidersHorizontal className="w-3.5 h-3.5" />
                             Set Par Stock
@@ -234,7 +262,7 @@ export default function Warehouse({ mainInventory = [], categories = [] }) {
           </div>
         </div>
 
-        {/* Par Stock Update Modal */}
+        {/* Central stock details and baseline par stock modal */}
         <WarehouseItemModal
           isOpen={isModalOpen}
           onClose={handleCloseModal}
