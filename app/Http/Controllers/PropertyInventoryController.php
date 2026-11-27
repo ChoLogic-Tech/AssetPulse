@@ -21,7 +21,8 @@ class PropertyInventoryController extends Controller
             ->leftJoin('brands as b', 'im.brand_id', '=', 'b.id')
             ->leftJoin('models as m', 'im.model_id', '=', 'm.id')
             // Sum stock-in quantities for the matching property and item
-            ->leftJoin('stock_in_logs as sil', function ($join) {$join->on('sil.property_id', '=', 'pi.property_id')
+            ->leftJoin('stock_in_logs as sil', function ($join) {
+                $join->on('sil.property_id', '=', 'pi.property_id')
                     ->on('sil.item_id', '=', 'pi.item_id');
             })
             ->select([
@@ -93,14 +94,15 @@ class PropertyInventoryController extends Controller
             ->keyBy(fn ($row) => "{$row->property_id}_{$row->item_id}");
 
         // Attach serialized_count and normalize parstock to an integer on each row
-        $enrichedInventory = $propertyInventory->map(function ($row) use ($serializedCounts) {$key = "{$row->property_id}_{$row->item_id}";
+        $enrichedInventory = $propertyInventory->map(function ($row) use ($serializedCounts) {
+            $key = "{$row->property_id}_{$row->item_id}";
             $row->serialized_count = (int) ($serializedCounts->get($key)?->serialized_count ?? 0);
             $row->parstock = (int) ($row->parstock ?? 0);
             return $row;
         });
 
-        // Render PropertyInventory page with props
-        return Inertia::render('Inventory/PropertyInventory', [
+        // Point to the nested PropertyInventory.jsx view inside Pages/Inventory/Property/
+        return Inertia::render('Inventory/Property/PropertyInventory', [
             'propertyInventory' => $enrichedInventory,
             'properties' => $properties,
             'categories' => $categories,
@@ -108,10 +110,10 @@ class PropertyInventoryController extends Controller
     }
 
     // Save an updated base parstock value for a property_inventory record
-    public function updateParstock(Request $request, int$propertyInventoryId)
+    public function updateParstock(Request $request, int $propertyInventoryId)
     {
         // Validate non-negative integer parstock
-        $validated =$request->validate([
+        $validated = $request->validate([
             'parstock' => ['required', 'integer', 'min:0'],
         ]);
 

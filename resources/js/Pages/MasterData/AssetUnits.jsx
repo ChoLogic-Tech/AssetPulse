@@ -12,10 +12,13 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import { AssetUnitModal } from '@/Components/Modals/AssetUnitModal';
 
+// Filter options without duplicate 'In Use' / 'Deployed' entries
 const STATUS_OPTIONS = [
+  'In Warehouse',
+  'In Property',
   'Available',
   'Deployed',
   'Under Repair',
@@ -24,14 +27,31 @@ const STATUS_OPTIONS = [
   'Decommissioned',
 ];
 
+// Distinct badge and dot colors so every status stands out clearly in the table
 const STATUS_STYLES = {
+  'In Warehouse': {
+    badge: 'bg-sky-50 text-sky-700 border-sky-200',
+    dot: 'bg-sky-500',
+  },
+  'In Property (Available)': {
+    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    dot: 'bg-emerald-500',
+  },
+  'In Property (In Use)': {
+    badge: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    dot: 'bg-indigo-500',
+  },
+  'In Property': {
+    badge: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    dot: 'bg-indigo-500',
+  },
   Available: {
     badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     dot: 'bg-emerald-500',
   },
   Deployed: {
-    badge: 'bg-sky-50 text-sky-700 border-sky-200',
-    dot: 'bg-sky-500',
+    badge: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    dot: 'bg-cyan-500',
   },
   'Under Repair': {
     badge: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -56,10 +76,50 @@ const DEFAULT_STATUS_STYLE = {
   dot: 'bg-slate-400',
 };
 
-function getStatusStyle(status) {
-  return STATUS_STYLES[status] ?? DEFAULT_STATUS_STYLE;
+// Normalize raw status and resolve property/room usage context for display
+function getDisplayStatus(asset) {
+  const raw = String(asset?.status ?? asset?.asset_status ?? 'Available').trim() || 'Available';
+  const normalizedRaw = raw === 'In Use' ? 'Deployed' : raw;
+  const hasProperty =
+    asset?.property_id !== null &&
+    asset?.property_id !== undefined &&
+    String(asset.property_id) !== '';
+  const hasLocation =
+    asset?.location_id !== null &&
+    asset?.location_id !== undefined &&
+    String(asset.location_id) !== '';
+
+  if (normalizedRaw === 'Deployed') {
+    return hasProperty ? 'In Property (In Use)' : 'Deployed';
+  }
+
+  if (normalizedRaw === 'In Property' || (hasProperty && normalizedRaw === 'Available')) {
+    return hasLocation ? 'In Property (In Use)' : 'In Property (Available)';
+  }
+
+  return normalizedRaw;
 }
 
+// Match badge styling by exact label or fallback keyword
+function getStatusStyle(label) {
+  if (STATUS_STYLES[label]) {
+    return STATUS_STYLES[label];
+  }
+
+  const lower = String(label || '').toLowerCase();
+  if (lower.includes('available')) return STATUS_STYLES.Available;
+  if (lower.includes('in use') || lower.includes('deployed')) return STATUS_STYLES.Deployed;
+  if (lower.includes('in property')) return STATUS_STYLES['In Property'];
+  if (lower.includes('warehouse')) return STATUS_STYLES['In Warehouse'];
+  if (lower.includes('repair')) return STATUS_STYLES['Under Repair'];
+  if (lower.includes('damage')) return STATUS_STYLES.Damage;
+  if (lower.includes('back load')) return STATUS_STYLES['Back Load (Iloilo)'];
+  if (lower.includes('decommission')) return STATUS_STYLES.Decommissioned;
+
+  return DEFAULT_STATUS_STYLE;
+}
+
+// Resolve SKU code directly from the unit row, item row, or SKU lookup list
 function resolveAssetSku(record, skuList = [], itemList = []) {
   if (!record || typeof record !== 'object') return '';
 
@@ -91,7 +151,9 @@ function resolveAssetSku(record, skuList = [], itemList = []) {
             ((s.item_id != null && String(s.item_id) === String(record.item_id)) ||
               (s.item_masterlist_id != null &&
                 String(s.item_masterlist_id) === String(record.item_id)))) ||
-            (matchedItem?.sku_id != null && s.id != null && String(s.id) === String(matchedItem.sku_id)) ||
+            (matchedItem?.sku_id != null &&
+              s.id != null &&
+              String(s.id) === String(matchedItem.sku_id)) ||
             (record.sku_id != null && s.id != null && String(s.id) === String(record.sku_id)))
       )
     : null;
@@ -99,6 +161,7 @@ function resolveAssetSku(record, skuList = [], itemList = []) {
   return matchedSku?.sku_code ? String(matchedSku.sku_code).trim() : '';
 }
 
+// Build pagination page numbers with ellipsis for large lists
 function getPageNumbers(currentPage, totalPages) {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -123,12 +186,30 @@ export default function AssetUnits({
   locations = [],
   suppliers = [],
 }) {
+  const { auth } = usePage().props;
+  const user = auth?.user;
+
+  // Default property filter to the logged-in user's property_id so their property is selected first
+  const defaultUserPropertyId =
+    user?.property_id !== undefined && user?.property_id !== null
+      ? String(user.property_id)
+      : '';
+
+  // Search, filter, and pagination state
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPropertyFilter, setSelectedPropertyFilter] = useState('');
+  const [selectedPropertyFilter, setSelectedPropertyFilter] = useState(defaultUserPropertyId);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
 
+  // Sync default property once if user property_id arrives after initial mount
+  useEffect(() => {
+    if (defaultUserPropertyId && selectedPropertyFilter === '') {
+      setSelectedPropertyFilter(defaultUserPropertyId);
+    }
+  }, [defaultUserPropertyId]);
+
+  // Modal state for registering, viewing, or editing an asset unit
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create');
@@ -140,6 +221,7 @@ export default function AssetUnits({
   const safeLocations = Array.isArray(locations) ? locations : [];
   const safeSuppliers = Array.isArray(suppliers) ? suppliers : [];
 
+  // Reset pagination to page 1 when filters or page size change
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
     setCurrentPage(1);
@@ -160,6 +242,7 @@ export default function AssetUnits({
     setCurrentPage(1);
   };
 
+  // Modal open/close handlers
   const handleOpenCreate = () => {
     setSelectedAsset(null);
     setModalMode('create');
@@ -182,6 +265,7 @@ export default function AssetUnits({
     setIsModalOpen(false);
   };
 
+  // Filter records by search query, selected property dropdown, and status selection
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredAssets = safeAssetUnits.filter((record) => {
     const skuValue = resolveAssetSku(record, safeSkus, safeItems);
@@ -197,14 +281,16 @@ export default function AssetUnits({
         : String(record.property_id) === String(selectedPropertyFilter)
       : true;
 
-    const statusValue = record.status ?? record.asset_status;
+    const rawStatus = String(record.status ?? record.asset_status ?? '').trim();
+    const canonicalStatus = rawStatus === 'In Use' ? 'Deployed' : rawStatus;
     const matchesStatus = selectedStatusFilter
-      ? statusValue === selectedStatusFilter
+      ? canonicalStatus === selectedStatusFilter
       : true;
 
     return matchesSearch && matchesProperty && matchesStatus;
   });
 
+  // Pagination slice calculation
   const totalItems = filteredAssets.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
 
@@ -223,7 +309,7 @@ export default function AssetUnits({
     <AuthenticatedLayout pageTitle={['Master Data', 'Serialized Asset Units']}>
       <Head title="Asset Units Directory" />
       <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-        {/* Header Section */}
+        {/* Page header and register button */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -244,7 +330,7 @@ export default function AssetUnits({
           </button>
         </div>
 
-        {/* Filter and Search Bar */}
+        {/* Search, property filter, status filter, and page size bar */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col md:flex-row gap-3 justify-between items-center shadow-sm">
           <div className="relative w-full md:w-80">
             <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
@@ -258,6 +344,7 @@ export default function AssetUnits({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-between md:justify-end">
+            {/* Auto-selects user's property while keeping other properties and All selectable */}
             <select
               value={selectedPropertyFilter}
               onChange={handlePropertyFilterChange}
@@ -266,7 +353,7 @@ export default function AssetUnits({
               <option value="">All Locations / Properties</option>
               <option value="warehouse">Central Warehouse</option>
               {safeProperties.map((p) => (
-                <option key={p.id} value={p.id}>
+                <option key={p.id} value={String(p.id)}>
                   {p.name}
                 </option>
               ))}
@@ -301,14 +388,14 @@ export default function AssetUnits({
           </div>
         </div>
 
-        {/* Assets Table */}
+        {/* Serialized assets table */}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-100 text-slate-600 uppercase text-xs font-semibold tracking-wider border-b border-slate-200">
                 <tr>
                   <th className="py-3.5 px-4">Serial Number / SKU</th>
-                  <th className="py-3.5 px-4">Catalog Item & Specs</th>
+                  <th className="py-3.5 px-4">Catalog Item &amp; Specs</th>
                   <th className="py-3.5 px-4">Current Custody</th>
                   <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4">Date Received</th>
@@ -318,8 +405,8 @@ export default function AssetUnits({
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {paginatedAssets.length > 0 ? (
                   paginatedAssets.map((asset) => {
-                    const statusValue = asset.status ?? asset.asset_status ?? 'Available';
-                    const statusStyle = getStatusStyle(statusValue);
+                    const displayStatus = getDisplayStatus(asset);
+                    const statusStyle = getStatusStyle(displayStatus);
                     const skuValue = resolveAssetSku(asset, safeSkus, safeItems);
                     const brandValue = asset.brand_name ?? asset.brand;
                     const modelValue = asset.model_name ?? asset.model;
@@ -328,7 +415,10 @@ export default function AssetUnits({
                     const locationValue = asset.location_name ?? asset.room_location;
 
                     return (
-                      <tr key={asset.id ?? asset.asset_id} className="hover:bg-slate-50/80 transition">
+                      <tr
+                        key={asset.id ?? asset.asset_id}
+                        className="hover:bg-slate-50/80 transition"
+                      >
                         <td className="py-3.5 px-4">
                           <div className="font-mono font-bold text-slate-900">
                             {asset.serial_number}
@@ -357,11 +447,12 @@ export default function AssetUnits({
                           )}
                         </td>
                         <td className="py-3.5 px-4">
+                          {/* Color-coded pill badge reflecting placement and usage state */}
                           <span
                             className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusStyle.badge}`}
                           >
                             <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`} />
-                            {statusValue}
+                            {displayStatus}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-xs text-slate-400">
@@ -403,7 +494,7 @@ export default function AssetUnits({
             </table>
           </div>
 
-          {/* Pagination Footer */}
+          {/* Pagination controls */}
           {totalItems > 0 && (
             <div className="px-4 py-3 bg-slate-50/70 border-t border-slate-200 flex flex-col sm:flex-row gap-3 items-center justify-between text-xs text-slate-600">
               <div>

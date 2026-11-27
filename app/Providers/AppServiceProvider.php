@@ -2,16 +2,14 @@
 
 namespace App\Providers;
 
-use App\Models\AssetUnits;
+use App\Models\AuditLogs;
 use App\Models\ItemMasterlist;
 use App\Observers\ItemMasterlistObserver;
-use App\Observers\AssetUnitsObserver;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\Event;
-use Illuminate\Auth\Events\Login;
-use Illuminate\Auth\Events\Failed;
-use App\Models\AuditLogs;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -44,14 +42,14 @@ class AppServiceProvider extends ServiceProvider
                 'action_type' => 'LOGIN_SUCCESS',
                 'table_name' => 'users',
                 'record_id' => $user->id,
-                'description' => "User successfully logged in from IP:" . request()->ip(),
+                'description' => 'User successfully logged in from IP:' . request()->ip(),
             ]);
         });
 
         // 2. Handle Failed Login Event
         Event::listen(Failed::class, function ($event) {
-            //$event->credentials contains the submitted credentials (e.g., username/email)
-            $attemptedEmail = $event->credentials ['email'] ?? $event->credentials['username'] ?? 'Unknown';
+            // $event->credentials contains the submitted credentials (e.g., username/email)
+            $attemptedEmail = $event->credentials['email'] ?? $event->credentials['username'] ?? 'Unknown';
 
             // Record failed login attempt in the audit_logs table
             AuditLogs::create([
@@ -59,13 +57,13 @@ class AppServiceProvider extends ServiceProvider
                 'action_type' => 'LOGIN_FAILED',
                 'table_name' => 'users',
                 'record_id' => null,
-                'description' => "Failed login attempt for user:" . $attemptedEmail . " from IP:" . request()->ip(),
+                'description' => 'Failed login attempt for user:' . $attemptedEmail . ' from IP:' . request()->ip(),
             ]);
         });
 
-
+        // Keep item masterlist observer active; asset unit auditing is handled in AssetUnitController
         ItemMasterlist::observe(ItemMasterlistObserver::class);
-        AssetUnits::observe(AssetUnitsObserver::class);
+
         Vite::prefetch(concurrency: 3);
     }
 }

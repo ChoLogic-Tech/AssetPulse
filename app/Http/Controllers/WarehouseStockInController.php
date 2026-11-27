@@ -145,7 +145,8 @@ class WarehouseStockInController extends Controller
             ->orderByDesc('au.id')
             ->get();
 
-        return Inertia::render('Inventory/WarehouseStockIn', [
+        // Render the moved view under Pages/Inventory/Warehouse/
+        return Inertia::render('Inventory/Warehouse/WarehouseStockIn', [
             'mainInventory' => $mainInventory,
             'stockIns' => $stockIns,
             'items' => $items,

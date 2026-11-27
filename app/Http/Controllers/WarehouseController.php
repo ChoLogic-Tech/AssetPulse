@@ -39,7 +39,8 @@ class WarehouseController extends Controller
             ->orderBy('name')
             ->get();
 
-        return Inertia::render('Inventory/Warehouse', [
+        // Point to the nested Warehouse.jsx view inside Pages/Inventory/Warehouse/
+        return Inertia::render('Inventory/Warehouse/Warehouse', [
             'mainInventory' => $mainInventory,
             'categories' => $categories,
         ]);

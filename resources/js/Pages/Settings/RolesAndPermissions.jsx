@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck, Search, Plus, Shield,
   Edit3, Trash2, AlertTriangle, Loader2,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Users
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
@@ -65,6 +65,12 @@ function PaginationBar({
   );
 }
 
+// Helper to read active user count from role or permission record
+const getActiveUsersCount = (record) => {
+  if (!record) return 0;
+  return Number(record.active_users_count ?? record.assigned_users_count ?? 0);
+};
+
 export default function Roles({ roles = [], permissions = [] }) {
   // Role State
   const [searchRoleQuery, setSearchRoleQuery] = useState('');
@@ -84,6 +90,7 @@ export default function Roles({ roles = [], permissions = [] }) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null); // { type: 'role' | 'permission', item: object }
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Reset page to 1 when search query or list size changes
   useEffect(() => {
@@ -108,6 +115,7 @@ export default function Roles({ roles = [], permissions = [] }) {
   };
 
   const handleOpenDeleteRole = (role) => {
+    setDeleteError('');
     setItemToDelete({ type: 'role', item: role });
     setIsDeleteModalOpen(true);
   };
@@ -126,6 +134,7 @@ export default function Roles({ roles = [], permissions = [] }) {
   };
 
   const handleOpenDeletePermission = (permission) => {
+    setDeleteError('');
     setItemToDelete({ type: 'permission', item: permission });
     setIsDeleteModalOpen(true);
   };
@@ -135,11 +144,27 @@ export default function Roles({ roles = [], permissions = [] }) {
     if (isDeleting) return;
     setIsDeleteModalOpen(false);
     setItemToDelete(null);
+    setDeleteError('');
+  };
+
+  // Extract a readable delete error message from validation errors or flash props
+  const resolveDeleteError = (errors, page, isRole) => {
+    const fieldKey = isRole ? 'role' : 'permission';
+    const fieldError = errors?.[fieldKey];
+
+    if (Array.isArray(fieldError) && fieldError[0]) return fieldError[0];
+    if (typeof fieldError === 'string' && fieldError) return fieldError;
+    if (page?.props?.flash?.error) return page.props.flash.error;
+
+    return isRole
+      ? 'Cannot delete this role because it is still assigned to active users.'
+      : 'Cannot delete this permission because it is still assigned to active users.';
   };
 
   const confirmDelete = () => {
     if (!itemToDelete) return;
 
+    setDeleteError('');
     const { type, item } = itemToDelete;
     const isRole = type === 'role';
     const routeName = isRole ? 'roles.destroy' : 'permissions.destroy';
@@ -151,19 +176,22 @@ export default function Roles({ roles = [], permissions = [] }) {
         onStart: () => setIsDeleting(true),
         onSuccess: (page) => {
           const errorFlash = page.props.flash?.error;
-          setIsDeleteModalOpen(false);
-          setItemToDelete(null);
 
           if (errorFlash) {
+            setDeleteError(errorFlash);
             reject(new Error(errorFlash));
-          } else {
-            resolve({ name: item.name });
+            return;
           }
-        },
-        onError: () => {
+
           setIsDeleteModalOpen(false);
           setItemToDelete(null);
-          reject(new Error(`Failed to delete ${label.toLowerCase()}.`));
+          setDeleteError('');
+          resolve({ name: item.name });
+        },
+        onError: (errors, page) => {
+          const message = resolveDeleteError(errors, page, isRole);
+          setDeleteError(message);
+          reject(new Error(message));
         },
         onFinish: () => setIsDeleting(false),
       });
@@ -177,7 +205,7 @@ export default function Roles({ roles = [], permissions = [] }) {
           ? err.message
           : isRole
             ? 'Cannot delete this role because it is still assigned to active users.'
-            : 'Cannot delete this permission because it is still assigned to roles.',
+            : 'Cannot delete this permission because it is still assigned to active users.',
     });
   };
 
@@ -206,6 +234,9 @@ export default function Roles({ roles = [], permissions = [] }) {
   );
 
   const deletingType = itemToDelete?.type === 'permission' ? 'Permission' : 'Role';
+  const activeUsersCount = getActiveUsersCount(itemToDelete?.item);
+  const hasActiveUsers = activeUsersCount > 0;
+  const activeUserNoun = activeUsersCount === 1 ? 'active user' : 'active users';
 
   return (
     <AuthenticatedLayout pageTitle={['Settings', 'User Management', 'Roles & Permissions']}>
@@ -444,6 +475,35 @@ export default function Roles({ roles = [], permissions = [] }) {
                     This action cannot be undone.
                   </p>
                 </div>
+
+                {/* Labeled warning banner when assigned to active users */}
+                {hasActiveUsers && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-left text-xs text-amber-900 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wide text-[11px] text-amber-800">
+                        <Users className="w-3.5 h-3.5" />
+                        Active User Assignment
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-amber-200/80 px-2 py-0.5 text-[11px] font-bold text-amber-950">
+                        {activeUsersCount} {activeUserNoun}
+                      </span>
+                    </div>
+                    <p className="text-amber-800">
+                      This {deletingType.toLowerCase()} is currently assigned to{' '}
+                      <span className="font-semibold">
+                        {activeUsersCount} {activeUserNoun}
+                      </span>
+                      .
+                    </p>
+                  </div>
+                )}
+
+                {deleteError && (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-left text-xs font-medium text-rose-700">
+                    {deleteError}
+                  </div>
+                )}
+
                 <div className="flex justify-center gap-2 pt-2">
                   <button
                     type="button"

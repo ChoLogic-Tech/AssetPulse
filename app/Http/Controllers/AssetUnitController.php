@@ -10,6 +10,7 @@ use App\Models\Sku;
 use App\Models\Supplier;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
@@ -17,7 +18,10 @@ use Inertia\Inertia;
 
 class AssetUnitController extends Controller
 {
+    // Accepted status values without redundant 'In Use' / 'Deployed' duplicates
     private const ALLOWED_STATUSES = [
+        'In Warehouse',
+        'In Property',
         'Available',
         'Deployed',
         'Under Repair',
@@ -26,6 +30,7 @@ class AssetUnitController extends Controller
         'Decommissioned',
     ];
 
+    // Load serialized asset units with joined item, property, room location, and supplier names
     public function index()
     {
         $assetUnits = DB::table('asset_units as au')
@@ -67,6 +72,7 @@ class AssetUnitController extends Controller
         ]);
     }
 
+    // Validate and register a new serialized asset unit, then write a concise audit log
     public function store(Request $request)
     {
         $this->normalizeRequest($request);
@@ -80,11 +86,48 @@ class AssetUnitController extends Controller
             unset($validated['date_received']); // Let PostgreSQL CURRENT_TIMESTAMP default apply
         }
 
-        AssetUnits::create($validated);
+        DB::transaction(function () use ($validated) {
+            $unit = AssetUnits::create($validated);
+
+            $serial = (string) $unit->serial_number;
+            $uomLabel = $this->resolveItemUomLabel($unit->item_id ? (int) $unit->item_id : null);
+            $locationName = $unit->location_id
+                ? (string) DB::table('locations')->where('id', $unit->location_id)->value('name')
+                : '';
+            $propertyName = $unit->property_id
+                ? ((string) DB::table('properties')->where('id', $unit->property_id)->value('name') ?: 'Central Warehouse')
+                : 'Central Warehouse';
+
+            // Use the room/location name (which already carries its prefix) or fall back to property/warehouse
+            $placeLabel = $locationName !== '' ? $locationName : $propertyName;
+
+            if ($locationName !== '' || $unit->status === 'Deployed') {
+                $description = sprintf(
+                    'Deployed 1 %s (%s) in use at %s',
+                    $uomLabel,
+                    $serial,
+                    $placeLabel
+                );
+            } else {
+                $description = sprintf(
+                    'Registered 1 %s (%s) at %s',
+                    $uomLabel,
+                    $serial,
+                    $placeLabel
+                );
+            }
+
+            $this->writeAuditLog(
+                actionType: 'ASSET_UNIT_CREATE',
+                recordId: (int) $unit->getKey(),
+                description: $description
+            );
+        });
 
         return redirect()->back()->with('success', 'Serialized asset unit registered.');
     }
 
+    // Validate and update an existing serialized asset unit, then write a concise audit log
     public function update(Request $request, $assetunit)
     {
         $assetUnit = $assetunit instanceof AssetUnits
@@ -102,11 +145,89 @@ class AssetUnitController extends Controller
             unset($validated['date_received']);
         }
 
-        $assetUnit->update($validated);
+        DB::transaction(function () use ($assetUnit, $validated) {
+            $oldSerial = (string) $assetUnit->serial_number;
+            $oldStatus = (string) $assetUnit->status;
+            $oldPropertyId = $assetUnit->property_id ? (int) $assetUnit->property_id : null;
+            $oldLocationId = $assetUnit->location_id ? (int) $assetUnit->location_id : null;
+
+            $assetUnit->update($validated);
+
+            $newSerial = (string) $assetUnit->serial_number;
+            $newStatus = (string) $assetUnit->status;
+            $newPropertyId = $assetUnit->property_id ? (int) $assetUnit->property_id : null;
+            $newLocationId = $assetUnit->location_id ? (int) $assetUnit->location_id : null;
+
+            $uomLabel = $this->resolveItemUomLabel($assetUnit->item_id ? (int) $assetUnit->item_id : null);
+            $newLocName = $newLocationId
+                ? (string) DB::table('locations')->where('id', $newLocationId)->value('name')
+                : '';
+            $newPropName = $newPropertyId
+                ? ((string) DB::table('properties')->where('id', $newPropertyId)->value('name') ?: 'Central Warehouse')
+                : 'Central Warehouse';
+
+            // Collect non-room changes so we don't repeat the room assignment
+            $otherChanges = [];
+
+            if ($oldSerial !== $newSerial) {
+                $otherChanges[] = "Serial: {$oldSerial} -> {$newSerial}";
+            }
+
+            if ($oldStatus !== $newStatus) {
+                $otherChanges[] = "Status: {$oldStatus} -> {$newStatus}";
+            }
+
+            if ($oldPropertyId !== $newPropertyId) {
+                $oldPropName = $oldPropertyId
+                    ? (DB::table('properties')->where('id', $oldPropertyId)->value('name') ?: 'Central Warehouse')
+                    : 'Central Warehouse';
+                $otherChanges[] = "Property: {$oldPropName} -> {$newPropName}";
+            }
+
+            $isNewlyDeployedToLocation =
+                ($newLocationId !== null && $oldLocationId !== $newLocationId)
+                || ($newStatus === 'Deployed' && $oldStatus !== 'Deployed');
+
+            if ($isNewlyDeployedToLocation) {
+                $placeLabel = $newLocName !== '' ? $newLocName : $newPropName;
+                $extraNotes = !empty($otherChanges)
+                    ? ' (' . implode(', ', $otherChanges) . ')'
+                    : '';
+
+                $description = sprintf(
+                    'Deployed 1 %s (%s) in use at %s%s',
+                    $uomLabel,
+                    $newSerial,
+                    $placeLabel,
+                    $extraNotes
+                );
+            } else {
+                $allChanges = $otherChanges;
+
+                if ($oldLocationId !== $newLocationId) {
+                    $oldLocName = $oldLocationId
+                        ? (DB::table('locations')->where('id', $oldLocationId)->value('name') ?: 'Unassigned')
+                        : 'Unassigned';
+                    $currentLocLabel = $newLocName !== '' ? $newLocName : 'Unassigned';
+                    $allChanges[] = "Room: {$oldLocName} -> {$currentLocLabel}";
+                }
+
+                $description = !empty($allChanges)
+                    ? sprintf('Updated 1 %s (%s) — %s', $uomLabel, $newSerial, implode(', ', $allChanges))
+                    : sprintf('Updated 1 %s (%s)', $uomLabel, $newSerial);
+            }
+
+            $this->writeAuditLog(
+                actionType: 'ASSET_UNIT_UPDATE',
+                recordId: (int) $assetUnit->getKey(),
+                description: $description
+            );
+        });
 
         return redirect()->back()->with('success', 'Serialized asset unit updated.');
     }
 
+    // Delete an asset unit unless deployed or referenced by movement/release history, and write a concise audit log
     public function destroy($assetunit)
     {
         $assetUnit = $assetunit instanceof AssetUnits
@@ -126,7 +247,19 @@ class AssetUnitController extends Controller
         }
 
         try {
-            $assetUnit->delete();
+            DB::transaction(function () use ($assetUnit) {
+                $unitId = (int) $assetUnit->getKey();
+                $serial = (string) $assetUnit->serial_number;
+                $uomLabel = $this->resolveItemUomLabel($assetUnit->item_id ? (int) $assetUnit->item_id : null);
+
+                $assetUnit->delete();
+
+                $this->writeAuditLog(
+                    actionType: 'ASSET_UNIT_DELETE',
+                    recordId: $unitId,
+                    description: sprintf('Deleted 1 %s (%s)', $uomLabel, $serial)
+                );
+            });
         } catch (QueryException $e) {
             return redirect()->back()->withErrors([
                 'delete' => 'Cannot delete this asset unit because it is referenced by other records.',
@@ -136,6 +269,42 @@ class AssetUnitController extends Controller
         return redirect()->back()->with('success', 'Serialized asset unit deleted.');
     }
 
+    // Look up the catalog item's unit of measure (e.g., unit, box, pcs) for readable audit descriptions
+    private function resolveItemUomLabel(?int $itemId): string
+    {
+        if (!$itemId) {
+            return 'unit';
+        }
+
+        $uomName = DB::table('item_masterlist as im')
+            ->leftJoin('uom as u', 'im.uom_id', '=', 'u.id')
+            ->where('im.id', $itemId)
+            ->value('u.name');
+
+        $cleanUom = trim((string) ($uomName ?? ''));
+
+        return $cleanUom !== '' ? strtolower($cleanUom) : 'unit';
+    }
+
+    // Write an audit log row for serialized asset unit actions
+    private function writeAuditLog(string $actionType, int $recordId, string $description): void
+    {
+        $actor = Auth::user();
+        if (!$actor) {
+            return;
+        }
+
+        DB::table('audit_logs')->insert([
+            'user_id' => $actor->id,
+            'action_type' => $actionType,
+            'table_name' => 'asset_units',
+            'record_id' => $recordId,
+            'description' => $description,
+            'created_at' => now(),
+        ]);
+    }
+
+    // Normalize serial formatting, foreign keys, and property/room consistency before validation
     private function normalizeRequest(Request $request, ?AssetUnits $existingUnit = null): void
     {
         $rawSerial = $request->has('serial_number') && $request->serial_number !== null && $request->serial_number !== ''
@@ -156,8 +325,7 @@ class AssetUnitController extends Controller
             ? ($request->location_id ?: null)
             : ($existingUnit?->location_id ?? null);
 
-        // If property changed (or was cleared) and location_id still points to a room
-        // under a different property, clear location_id instead of failing validation
+        // Clear location_id if it does not belong to the chosen property
         if ($locationId !== null) {
             $locationRow = DB::table('locations')->where('id', $locationId)->first();
             if (!$locationRow) {
@@ -187,6 +355,7 @@ class AssetUnitController extends Controller
         ]);
     }
 
+    // Validation rules for creating and updating asset units
     private function rules(Request $request, $ignoreId = null): array
     {
         return [
@@ -213,6 +382,7 @@ class AssetUnitController extends Controller
         ];
     }
 
+    // Custom validation messages
     private function messages(): array
     {
         return [
@@ -221,6 +391,7 @@ class AssetUnitController extends Controller
         ];
     }
 
+    // Case-insensitive, whitespace-normalized uniqueness check on serial_number
     private function uniqueSerialRule(string $serialNumber, $ignoreId = null)
     {
         $normalizedSerial = mb_strtolower(trim(preg_replace('/\s+/', ' ', $serialNumber)));

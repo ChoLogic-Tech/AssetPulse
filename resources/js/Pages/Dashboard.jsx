@@ -22,6 +22,55 @@ import AuditLogsTable from '@/Components/Dashboard/AuditLogsTable';
 const OVERVIEW_AUDIT_LOG_LIMIT = 10;
 const PROPERTY_PAR_OVERVIEW_LIMIT = 10;
 
+// Ordered palette matching the pin/bar colors shown in "Assets by Property"
+const PROPERTY_COLOR_THEMES = [
+  'bg-cyan-50 text-cyan-800 border-cyan-200',       // 1st property (teal/cyan)
+  'bg-amber-50 text-amber-800 border-amber-200',    // 2nd property (amber/orange)
+  'bg-lime-50 text-lime-800 border-lime-200',       // 3rd property (olive/lime)
+  'bg-blue-50 text-blue-800 border-blue-200',       // 4th property (blue)
+  'bg-orange-50 text-orange-800 border-orange-200', // 5th property (orange)
+  'bg-rose-50 text-rose-800 border-rose-200',       // 6th property (rose)
+  'bg-stone-100 text-stone-700 border-stone-300',   // 7th property (stone/taupe)
+];
+
+// Explicit property-name color map so the badge matches the property's pin/bar even if list order changes
+const PROPERTY_NAME_THEME_MAP = {
+  'henann palm': 'bg-cyan-50 text-cyan-800 border-cyan-200',
+  'henann crystal': 'bg-amber-50 text-amber-800 border-amber-200',
+  'henann garden': 'bg-lime-50 text-lime-800 border-lime-200',
+  'henann lagoon': 'bg-blue-50 text-blue-800 border-blue-200',
+  'henann park': 'bg-orange-50 text-orange-800 border-orange-200',
+  'henann prime': 'bg-rose-50 text-rose-800 border-rose-200',
+  'henann regency': 'bg-stone-100 text-stone-700 border-stone-300',
+  'central warehouse': 'bg-slate-100 text-slate-800 border-slate-300',
+};
+
+// Pick the badge class matching the property's color in PropertyDistributionCard
+function getPropertyBadgeClass(propertyName, propertyId, propertyDistribution = []) {
+  const normalizedName = String(propertyName ?? '').trim().toLowerCase();
+
+  if (normalizedName && PROPERTY_NAME_THEME_MAP[normalizedName]) {
+    return PROPERTY_NAME_THEME_MAP[normalizedName];
+  }
+
+  const list = Array.isArray(propertyDistribution) ? propertyDistribution : [];
+  const matchedIndex = list.findIndex((item) => {
+    if (propertyId !== null && propertyId !== undefined && item?.id !== undefined) {
+      if (String(item.id) === String(propertyId)) return true;
+    }
+    if (normalizedName && item?.name) {
+      return String(item.name).trim().toLowerCase() === normalizedName;
+    }
+    return false;
+  });
+
+  if (matchedIndex >= 0) {
+    return PROPERTY_COLOR_THEMES[matchedIndex % PROPERTY_COLOR_THEMES.length];
+  }
+
+  return 'bg-slate-100 text-slate-700 border-slate-200';
+}
+
 // Normalize DB audit log fields into the shape expected by AuditLogsTable
 function normalizeAuditLogRow(row) {
   if (!row || typeof row !== 'object') return row;
@@ -123,6 +172,12 @@ export default function Dashboard({ dashboard = {} }) {
 
     return userPropertyId !== null ? `Property #${userPropertyId}` : 'Your Property';
   }, [userPropertyParRows, propertyDistribution, userPropertyId]);
+
+  // Match badge color to the property's color in Assets by Property
+  const userPropertyBadgeClass = useMemo(
+    () => getPropertyBadgeClass(userPropertyName, userPropertyId, propertyDistribution),
+    [userPropertyName, userPropertyId, propertyDistribution]
+  );
 
   // Count how many items in the user's property are at or below baseline parstock
   const userPropertyLowCount = useMemo(() => {
@@ -280,7 +335,9 @@ export default function Dashboard({ dashboard = {} }) {
                     <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-800">
                       Property Par Stock Overview (Top {PROPERTY_PAR_OVERVIEW_LIMIT})
                     </h3>
-                    <span className="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${userPropertyBadgeClass}`}
+                    >
                       {userPropertyName}
                     </span>
                     <span

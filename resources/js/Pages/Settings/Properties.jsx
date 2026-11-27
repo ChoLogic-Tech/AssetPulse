@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  Building2, Search, Plus, MapPin, 
-  Edit3, AlertTriangle , Trash2, CheckCircle2 
+import {
+  Building2, Search, Plus,
+  Edit3, AlertTriangle, Trash2
 } from 'lucide-react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
@@ -9,91 +9,117 @@ import { PropertyModal } from '@/Components/Modals/PropertyModal';
 import { toast } from 'sonner';
 
 export default function Properties({ properties = [] }) {
+  // Search and modal state for properties directory
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit'
+  const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit' | 'view'
 
-// Delete Confirmation Modal States
+  // Delete confirmation modal state
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [propertyToDelete, setUserToDelete] = useState(null);
+  const [propertyToDelete, setPropertyToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
+  // Open modal in create mode
   const handleOpenCreate = () => {
     setSelectedProperty(null);
     setModalMode('create');
     setIsModalOpen(true);
   };
 
+  // Open modal in edit mode with selected property
   const handleOpenEdit = (property) => {
     setSelectedProperty(property);
     setModalMode('edit');
     setIsModalOpen(true);
   };
 
+  // Close create/edit modal
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedProperty(null);
+  };
+
+  // Open delete confirmation dialog and clear any previous delete error
   const handleOpenDelete = (property) => {
-    setUserToDelete(property);
+    setDeleteError('');
+    setPropertyToDelete(property);
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDelete = () => {
-    if (propertyToDelete) {
-      // 1. Wrap the router.delete request in a native Promise
-      const deletePromise = new Promise((resolve, reject) => {
-        router.delete(route('properties.destroy', propertyToDelete.id), {
-          onStart: () => setIsDeleting(true),
-          onSuccess: () => {
-            setIsDeleteModalOpen(false);
-            setUserToDelete(null);
-            // Resolve with data that can be used in success message
-            setTimeout (() => resolve({ name: propertyToDelete.name }), 500);
-          },
-          onError: (errors) => {
-            reject(errors);
-          },
-          onFinish: () => setIsDeleting(false),
-        });
-      });
-
-      // 2. Pass the promise into Sonner's toast.promise
-      toast.promise(deletePromise, {
-        loading: 'Deleting branch...',
-        success: (data) => `User "${data.name}" successfully deleted.`,
-        error: 'Failed to delete user.',
-      });
-    }
+  // Extract a readable error message from Inertia's errors bag
+  const resolveDeleteError = (err) => {
+    if (Array.isArray(err?.property)) return err.property[0];
+    if (typeof err?.property === 'string') return err.property;
+    return 'Failed to delete property.';
   };
 
-  const filteredProperties = properties.filter(property => 
+  // Delete property and show toast promise + inline modal feedback
+  const confirmDelete = () => {
+    if (!propertyToDelete) return;
+
+    setDeleteError('');
+    const targetName = propertyToDelete.name;
+    const targetId = propertyToDelete.id;
+
+    const deletePromise = new Promise((resolve, reject) => {
+      router.delete(`/settings/properties/${targetId}`, {
+        preserveScroll: true,
+        onStart: () => setIsDeleting(true),
+        onSuccess: () => {
+          setIsDeleteModalOpen(false);
+          setPropertyToDelete(null);
+          setDeleteError('');
+          resolve({ name: targetName });
+        },
+        onError: (errors) => {
+          const message = resolveDeleteError(errors);
+          setDeleteError(message);
+          reject(new Error(message));
+        },
+        onFinish: () => setIsDeleting(false),
+      });
+    });
+
+    toast.promise(deletePromise, {
+      loading: 'Deleting property...',
+      success: (data) => `Property "${data.name}" successfully deleted.`,
+      error: (err) => err?.message || 'Failed to delete property.',
+    });
+  };
+
+  // Filter properties by search query
+  const filteredProperties = properties.filter((property) =>
     property.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <AuthenticatedLayout pageTitle={["Settings", "Organization", "Properties & Branches"]}>
+    <AuthenticatedLayout pageTitle={['Settings', 'Organization', 'Properties & Branches']}>
       <Head title="Properties Directory" />
       <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-        
-        {/* Header Section */}
+        {/* Header section with indigo primary create button */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
               <Building2 className="w-6 h-6 text-indigo-600" />
-              Properties & Remote Branches
+              Properties &amp; Remote Branches
             </h1>
             <p className="text-sm text-slate-500">
               Manage company-owned properties, resorts, offices, and operational hubs.
             </p>
           </div>
-          <button 
+          <button
+            type="button"
             onClick={handleOpenCreate}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-lg shadow-sm transition"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-lg shadow-sm transition cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Add New Property
           </button>
         </div>
 
-        {/* Search Bar */}
+        {/* Search toolbar */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col md:flex-row gap-3 justify-between items-center shadow-sm">
           <div className="relative w-full md:w-80">
             <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
@@ -107,7 +133,7 @@ export default function Properties({ properties = [] }) {
           </div>
         </div>
 
-        {/* Properties Table */}
+        {/* Properties directory table */}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -128,17 +154,19 @@ export default function Properties({ properties = [] }) {
                         </div>
                       </td>
                       <td className="py-3.5 px-4 text-right space-x-1">
-                        <button 
+                        <button
+                          type="button"
                           onClick={() => handleOpenEdit(property)}
-                          title="Edit Property" 
-                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition"
+                          title="Edit Property"
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition cursor-pointer"
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
-                        <button 
-                          onClick={() => handleOpenDelete(property) }
-                          title="Delete Property" 
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition"
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDelete(property)}
+                          title="Delete Property"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -157,52 +185,64 @@ export default function Properties({ properties = [] }) {
           </div>
         </div>
 
-        {/* Property Modal Component */}
-        <PropertyModal 
+        {/* Property create/edit modal */}
+        <PropertyModal
           isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          onClose={handleCloseModal}
           mode={modalMode}
-          property={selectedProperty}
-          onSuccessCreate={() => toast.success('User successfully created.')}
-          onSuccessUpdate={() => toast.success('User successfully updated.')}
+          initialData={selectedProperty}
         />
 
-        {/* Custom Delete Confirmation Modal */}
-                {isDeleteModalOpen && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                      <div className="p-6 text-center space-y-4">
-                        <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
-                          <AlertTriangle className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-bold text-slate-900">Delete Role</h3>
-                          <p className="text-sm text-slate-500 mt-1">
-                            Are you sure you want to remove <span className="font-semibold text-slate-700">"{propertyToDelete?.name}"</span>? This action cannot be undone.
-                          </p>
-                        </div>
-                        <div className="flex justify-center gap-2 pt-2">
-                          <button
-                            type="button"
-                            onClick={() => setIsDeleteModalOpen(false)}
-                            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isDeleting}
-                            onClick={confirmDelete}
-                            className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-50"
-                          >
-                            {isDeleting ? 'Deleting...' : 'Yes, Delete'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+        {/* Delete confirmation modal */}
+        {isDeleteModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              <div className="p-6 text-center space-y-4">
+                <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Delete Property</h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Are you sure you want to remove{' '}
+                    <span className="font-semibold text-slate-700">
+                      &quot;{propertyToDelete?.name}&quot;
+                    </span>
+                    ? This action cannot be undone.
+                  </p>
+                </div>
+
+                {deleteError && (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-left text-xs font-medium text-rose-700">
+                    {deleteError}
                   </div>
                 )}
 
+                <div className="flex justify-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={() => {
+                      setIsDeleteModalOpen(false);
+                      setDeleteError('');
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition disabled:opacity-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={confirmDelete}
+                    className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AuthenticatedLayout>
   );

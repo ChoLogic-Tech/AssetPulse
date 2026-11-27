@@ -1,8 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, MapPin, Edit3, CheckCircle2, ChevronDown, Check, Search } from 'lucide-react';
-import { useForm } from '@inertiajs/react';
+import {
+  X,
+  MapPin,
+  Building2,
+  Edit3,
+  CheckCircle2,
+  ChevronDown,
+  Check,
+  Search,
+} from 'lucide-react';
+import { useForm, usePage } from '@inertiajs/react';
 import { toast } from 'sonner';
 
+// Known branch/property prefix codes for automatic location naming
 const PROPERTY_CODES = {
   'henann palm': 'HPM',
   'henann regency': 'HRB',
@@ -15,6 +25,7 @@ const PROPERTY_CODES = {
 
 const KNOWN_CODES = Object.values(PROPERTY_CODES);
 
+// Resolve a property's short code from its fields or known branch name
 function getPropertyCode(property) {
   if (!property) return '';
   if (property.code || property.abbreviation) {
@@ -30,6 +41,7 @@ function getPropertyCode(property) {
   return matchedKey ? PROPERTY_CODES[matchedKey] : '';
 }
 
+// Swap or apply a branch prefix on the location name without duplicating codes
 function applyPropertyPrefix(currentName, nextCode, previousCode = '') {
   const codesToStrip = Array.from(
     new Set([previousCode, ...KNOWN_CODES].filter(Boolean))
@@ -53,6 +65,7 @@ function applyPropertyPrefix(currentName, nextCode, previousCode = '') {
   return baseName ? `${nextCode} - ${baseName}` : `${nextCode} - `;
 }
 
+// Searchable dropdown for picking a property or branch
 function ScrollablePropertyDropdown({
   value,
   onChange,
@@ -75,6 +88,7 @@ function ScrollablePropertyDropdown({
     return String(p.name ?? '').toLowerCase().includes(q);
   });
 
+  // Close dropdown on outside click or Escape key and focus search box on open
   useEffect(() => {
     if (!isOpen) return;
 
@@ -215,28 +229,49 @@ export function LocationModal({
   canSelectAnyProperty = false,
   userPropertyId = '',
 }) {
+  const { auth } = usePage().props;
   const isEdit = mode === 'edit';
   const isView = mode === 'view';
   const lastCodeRef = useRef('');
+
+  // Prefer the prop passed from the parent page, falling back to the logged-in user's property_id
+  const resolvedUserPropertyId =
+    userPropertyId !== '' && userPropertyId !== null && userPropertyId !== undefined
+      ? String(userPropertyId)
+      : auth?.user?.property_id !== undefined && auth?.user?.property_id !== null
+      ? String(auth.user.property_id)
+      : '';
 
   const { data, setData, post, put, processing, errors, reset, clearErrors } = useForm({
     name: '',
     property_id: '',
   });
 
+  // Auto-select the user's property when creating (or when editing a record without a property)
   useEffect(() => {
     if (!isOpen) return;
     clearErrors();
 
+    const propertyList = Array.isArray(properties) ? properties : [];
+
     if ((isEdit || isView) && initialData) {
-      lastCodeRef.current = '';
+      const initialPropId =
+        initialData.property_id !== undefined && initialData.property_id !== null
+          ? String(initialData.property_id)
+          : isEdit && resolvedUserPropertyId
+          ? resolvedUserPropertyId
+          : '';
+      const matchedProperty = propertyList.find((p) => String(p.id) === initialPropId);
+
+      lastCodeRef.current = getPropertyCode(matchedProperty);
       setData({
         name: initialData.name ?? '',
-        property_id: initialData.property_id ?? '',
+        property_id: initialPropId,
       });
     } else {
-      const defaultPropertyId = canSelectAnyProperty ? '' : (userPropertyId ?? '');
-      const defaultProperty = properties.find(
+      // Auto-select the user's property so it is pre-selected in the dropdown while allowing changes
+      const defaultPropertyId = resolvedUserPropertyId;
+      const defaultProperty = propertyList.find(
         (p) => String(p.id) === String(defaultPropertyId)
       );
       const defaultCode = getPropertyCode(defaultProperty);
@@ -247,7 +282,7 @@ export function LocationModal({
         property_id: defaultPropertyId,
       });
     }
-  }, [isOpen, mode, initialData, canSelectAnyProperty, userPropertyId, properties]);
+  }, [isOpen, mode, initialData, resolvedUserPropertyId, properties]);
 
   if (!isOpen) return null;
 
@@ -258,6 +293,7 @@ export function LocationModal({
     }
   };
 
+  // Update property_id and sync the branch prefix in create mode
   const handlePropertySelect = (nextPropertyId) => {
     handleFieldChange('property_id', nextPropertyId);
 
@@ -273,6 +309,7 @@ export function LocationModal({
     setData('name', nextName);
   };
 
+  // Submit create or update request via Inertia and show Sonner toast feedback
   const handleSubmit = (e) => {
     e.preventDefault();
     if (isView || processing) return;
@@ -329,7 +366,7 @@ export function LocationModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-visible my-8 animate-in fade-in zoom-in duration-200">
-        {/* Header */}
+        {/* Modal header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl">
           <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
             {isEdit ? (
@@ -352,30 +389,35 @@ export function LocationModal({
           </button>
         </div>
 
-        {/* Body */}
+        {/* Modal body */}
         {isView ? (
+          /* Clean, easy-to-scan location details view */
           <div className="p-6 space-y-4 text-sm text-slate-600">
-            <div>
-              <span className="block text-xs text-slate-400 uppercase font-semibold">
-                Location / Room Name
+            <div className="p-4 rounded-xl bg-slate-50/90 border border-slate-200/80 space-y-1">
+              <span className="flex items-center gap-1.5 text-[11px] text-slate-400 uppercase font-semibold tracking-wider">
+                <MapPin className="w-3.5 h-3.5 text-indigo-500" />
+                Location / Storage Room
               </span>
-              <span className="font-semibold text-slate-900 text-base">
-                {initialData?.name}
-              </span>
+              <div className="font-bold text-slate-900 text-base">
+                {initialData?.name || '—'}
+              </div>
             </div>
-            <div>
-              <span className="block text-xs text-slate-400 uppercase font-semibold">
+
+            <div className="p-3.5 rounded-xl bg-white border border-slate-200/70 space-y-1">
+              <span className="flex items-center gap-1.5 text-[11px] text-slate-400 uppercase font-semibold tracking-wider">
+                <Building2 className="w-3.5 h-3.5 text-slate-400" />
                 Property / Branch
               </span>
-              <span className="font-medium text-slate-800">
+              <div className="font-semibold text-slate-800">
                 {viewPropertyLabel}
-              </span>
+              </div>
             </div>
-            <div className="pt-4 border-t border-slate-100 flex justify-end">
+
+            <div className="pt-3 border-t border-slate-100 flex justify-end">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition"
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer"
               >
                 Close
               </button>
@@ -387,6 +429,7 @@ export function LocationModal({
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
                 Property / Branch
               </label>
+              {/* Dropdown auto-selects the user's property while allowing switching when permitted */}
               <ScrollablePropertyDropdown
                 value={data.property_id}
                 onChange={handlePropertySelect}

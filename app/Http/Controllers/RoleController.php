@@ -5,65 +5,153 @@ namespace App\Http\Controllers;
 use App\Models\Role;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
-class RoleController extends Controller {
-
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'name' => 'required|string|max:50|unique:roles,name',
-            'description' => 'nullable|string',
-        ]);
-
-        //If validation passes, laravel will triggers Eloquent via 
-        Role::create($validated); 
-
-        return redirect()->back()->with('success', 'Role successfully created.');
-    }
-
-    //index or get function to fetch data in PostgreSQL
+class RoleController extends Controller
+{
+    // Fetch all roles ordered by ID for the Roles & Permissions page
     public function index()
     {
-        // 1. Fetch all rows from PostgreSQL via Eloquent
         $roles = Role::orderBy('id', 'asc')->get();
 
-        // 2. Send data to the React component as the 'roles' prop
         return Inertia::render('Settings/RolesAndPermissions', [
             'roles' => $roles,
         ]);
     }
 
-    // 3. UPDATE: Modify an existing role
+    // Create a new role and record an audit log entry
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'name'        => ['required', 'string', 'max:50', 'unique:roles,name'],
+            'description' => ['nullable', 'string'],
+        ], [
+            'name.required' => 'Role name is required.',
+            'name.unique'   => 'A role with this name already exists.',
+            'name.max'      => 'Role name must not exceed 50 characters.',
+        ]);
+
+        DB::transaction(function () use ($validated) {
+            // Create the role record
+            $role = Role::create([
+                'name'        => trim($validated['name']),
+                'description' => isset($validated['description']) ? trim($validated['description']) : null,
+            ]);
+
+            // Record role creation in audit logs
+            $this->writeAuditLog(
+                actionType: 'ROLE_CREATE',
+                recordId: (int) $role->id,
+                description: sprintf('Created role %s', $role->name)
+            );
+        });
+
+        return redirect()->back()->with('success', 'Role created successfully.');
+    }
+
+    // Update an existing role and record an audit log entry
     public function update(Request $request, Role $role)
     {
         $validated = $request->validate([
-            'name'        => 'required|string|max:50|unique:roles,name,' . $role->id,
-            'description' => 'nullable|string',
+            'name'        => ['required', 'string', 'max:50', 'unique:roles,name,' . $role->id],
+            'description' => ['nullable', 'string'],
+        ], [
+            'name.required' => 'Role name is required.',
+            'name.unique'   => 'A role with this name already exists.',
+            'name.max'      => 'Role name must not exceed 50 characters.',
         ]);
 
-        $role->update($validated);
+        DB::transaction(function () use ($role, $validated) {
+            $oldName = (string) $role->name;
+            $newName = trim($validated['name']);
 
-        return redirect()->back()->with('success', 'Role successfully updated.');
+            // Update the role record
+            $role->update([
+                'name'        => $newName,
+                'description' => isset($validated['description']) ? trim($validated['description']) : null,
+            ]);
+
+            // Record role update in audit logs
+            $logDescription = $oldName !== $newName
+                ? sprintf('Updated role %s -> %s', $oldName, $newName)
+                : sprintf('Updated role %s', $newName);
+
+            $this->writeAuditLog(
+                actionType: 'ROLE_UPDATE',
+                recordId: (int) $role->id,
+                description: $logDescription
+            );
+        });
+
+        return redirect()->back()->with('success', 'Role updated successfully.');
     }
 
-    // 4. DELETE: Remove a role from the database
+    // Delete a role if not in use, or return a clear validation error message
     public function destroy(Role $role)
     {
         try {
-            $role->delete();
+            DB::transaction(function () use ($role) {
+                $roleId = (int) $role->id;
+                $roleName = (string) $role->name;
 
-            return redirect()->back()->with('success', 'Role successfully deleted.');
-        } catch (\Illuminate\Database\QueryException $e) {
-            // PostgreSQL foreign key violation error code
+                // Show a clear message when users are still assigned to this role
+                $assignedUsersCount = (int) DB::table('users')
+                    ->where('role_id', $roleId)
+                    ->count();
+
+                if ($assignedUsersCount > 0) {
+                    $userLabel = $assignedUsersCount === 1 ? 'user' : 'users';
+
+                    throw ValidationException::withMessages([
+                        'role' => [
+                            "Cannot delete {$roleName} because it is assigned to {$assignedUsersCount} {$userLabel}.",
+                        ],
+                    ]);
+                }
+
+                $role->delete();
+
+                // Record role deletion in audit logs
+                $this->writeAuditLog(
+                    actionType: 'ROLE_DELETE',
+                    recordId: $roleId,
+                    description: sprintf('Deleted role %s', $roleName)
+                );
+            });
+
+            return redirect()->back()->with('success', 'Role deleted successfully.');
+        } catch (QueryException $e) {
+            // Catch PostgreSQL foreign key violations (23503) and return a readable message
             if ($e->getCode() === '23503') {
-                return redirect()->back()->with('error', 'Cannot delete this role because it is still assigned to active users.');
+                throw ValidationException::withMessages([
+                    'role' => [
+                        "Cannot delete {$role->name} because it is still referenced by existing records.",
+                    ],
+                ]);
             }
 
-            // Re-throw if it's a different database error
             throw $e;
         }
     }
 
-    
+    // Write an audit log entry for role management actions
+    private function writeAuditLog(string $actionType, int $recordId, string $description): void
+    {
+        $actor = Auth::user();
+        if (!$actor) {
+            return;
+        }
+
+        DB::table('audit_logs')->insert([
+            'user_id'     => $actor->id,
+            'action_type' => $actionType,
+            'table_name'  => 'roles',
+            'record_id'   => $recordId,
+            'description' => $description,
+            'created_at'  => now(),
+        ]);
+    }
 }

@@ -4,7 +4,7 @@ import {
     LayoutDashboard, Boxes, ClipboardList, ChartColumnBig,
     Database, History, Settings, Warehouse, ListCheck, ShelvingUnit, Layers,
     Tag, UserGroup, Component, Truck, UserShield, BuildingComplex, Plus,
-    Eye, MapPin, Barcode, Tags
+    Eye, MapPin, Barcode, Tags, ArrowLeftRight, Repeat
 } from "lucide-react";
 import { Link, usePage } from "@inertiajs/react";
 import logo from "../img/logo.png";
@@ -37,6 +37,15 @@ const SIDEBAR_MENUS = [
                 submenuItems: [
                     { title: "Property Stock Monitor", icon: Eye, href: "/inventory/propertyinventory" },
                     { title: "Property Stock In", icon: Plus, href: "/inventory/propertystockin" }
+                ]
+            },
+            {
+                title: "Transactions",
+                icon: ArrowLeftRight,
+                submenu: true,
+                submenuItems: [
+                    { title: "Deployments", icon: MapPin, href: "/inventory/deployments" },
+                    { title: "Borrowing", icon: Repeat, href: "/inventory/borrowing" }
                 ]
             }
         ]
@@ -259,7 +268,7 @@ export default function Sidebar() {
                         />
                         <div className={`text-center flex flex-col items-center ${!open && "hidden"}`}>
                             <p className="text-[11px] leading-tight text-slate-500">{appVersion}</p>
-                            <h1 className="font-bold text-base leading-snug tracking-wider bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+                            <h1 className="font-bold text-base leading-snug tracking-wider text-indigo-400">
                                 AssetPulse
                             </h1>
                             <p className="text-[9px] text-slate-500 font-medium uppercase tracking-widest whitespace-nowrap">
@@ -357,7 +366,7 @@ export default function Sidebar() {
                                                     return (
                                                         <li key={subItem.title}>
                                                             {subItem.submenu ? (
-                                                                // Nested dropdown parent (Warehouse / Property Inventory)
+                                                                // Nested dropdown parent (Warehouse / Property Inventory / Transactions)
                                                                 <div>
                                                                     <div
                                                                         onClick={(e) => handleSubDropdownToggle(subIndex, e)}

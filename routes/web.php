@@ -4,6 +4,8 @@ use App\Http\Controllers\AssetUnitController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeploymentController;
+use App\Http\Controllers\BorrowingController;
 use App\Http\Controllers\ItemMasterController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\ModelController;
@@ -109,16 +111,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Main dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Inventory monitor and stock-in pages
+    // Inventory monitor, stock-in, and property transaction routes
     Route::prefix('inventory')->name('inventory.')->group(function () {
+        // Warehouse views (renders Inventory/Warehouse/*)
         Route::get('/warehouse', [WarehouseController::class, 'index'])->name('warehouse');
-
         Route::get('/warehousestockin', [WarehouseStockInController::class, 'index'])
             ->name('warehousestockin.index');
 
+        // Property views (renders Inventory/Property/*)
         Route::get('/propertyinventory', [PropertyInventoryController::class, 'index'])
             ->name('propertyinventory');
-
         Route::get('/propertystockin', [PropertyStockInController::class, 'index'])
             ->name('propertystockin.index');
     });
@@ -161,11 +163,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return Inertia::render('AuditTrail/Index');
     })->name('audit-trail');
 
-    // Settings pages
+    // Settings pages & property CRUD actions
     Route::prefix('settings')->name('settings.')->group(function () {
         Route::get('/users', [UserController::class, 'index'])->name('users.index');
         Route::get('/rolesandpermissions', [RoleController::class, 'index'])->name('roles.index');
         Route::get('/properties', [PropertyController::class, 'index'])->name('properties.index');
+        Route::post('/properties', [PropertyController::class, 'store'])->name('properties.store');
+        Route::put('/properties/{property}', [PropertyController::class, 'update'])->name('properties.update');
+        Route::delete('/properties/{property}', [PropertyController::class, 'destroy'])->name('properties.destroy');
     });
 
     // Logout handler
@@ -194,7 +199,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/propertyparstocks/{propertyInventoryId}', [PropertyInventoryController::class, 'updateParstock'])
         ->name('propertyparstocks.update');
 
-    // Property stock-in CRUD actions (fixed {propertystockin} route parameter name)
+    // Property stock-in CRUD actions
     Route::prefix('propertystockins')->name('propertystockins.')->group(function () {
         Route::post('/', [PropertyStockInController::class, 'store'])->name('store');
         Route::put('/{propertystockin}', [PropertyStockInController::class, 'update'])->name('update');

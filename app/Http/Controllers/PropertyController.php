@@ -2,101 +2,224 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class PropertyController extends Controller
 {
-    // Load property stock balances, RF / previous RF tracking, and serialized asset counts
+    // Load properties and user assignment counts for the Property Assignments page
     public function index()
     {
-        $propertyInventory = DB::table('property_inventory as pi')
-            ->join('properties as prop', 'pi.property_id', '=', 'prop.id')
-            ->join('item_masterlist as im', 'pi.item_id', '=', 'im.id')
-            ->leftJoin('sku as s', 'im.sku_id', '=', 's.id')
-            ->leftJoin('uom as u', 'im.uom_id', '=', 'u.id')
-            ->leftJoin('categories as c', 'im.category_id', '=', 'c.id')
-            ->leftJoin('brands as b', 'im.brand_id', '=', 'b.id')
-            ->leftJoin('models as m', 'im.model_id', '=', 'm.id')
-            ->leftJoin('stock_in_logs as sil', function ($join) {
-                $join->on('sil.property_id', '=', 'pi.property_id')
-                    ->on('sil.item_id', '=', 'pi.item_id');
-            })
+        $properties = DB::table('properties as prop')
+            ->leftJoin('users as u', 'u.property_id', '=', 'prop.id')
             ->select([
-                'pi.id',
-                'pi.property_id',
-                'pi.item_id',
-                'pi.qty',
-                'pi.rf_num',
-                'pi.previous_rf_num',
-                'pi.last_updated',
-                'prop.name as property_name',
-                'im.item_name',
-                'im.category_id',
-                'im.uom_id',
-                DB::raw("COALESCE(s.sku_code, 'NO-SKU') as sku"),
-                DB::raw("COALESCE(u.name, 'Unit') as uom_name"),
-                'u.code as uom_code',
-                DB::raw("COALESCE(c.name, 'Uncategorized') as category_name"),
-                'b.name as brand_name',
-                'm.name as model_name',
-                DB::raw('COALESCE(SUM(sil.quantity), 0) as stockin'),
-            ])
-            ->groupBy([
-                'pi.id',
-                'pi.property_id',
-                'pi.item_id',
-                'pi.qty',
-                'pi.rf_num',
-                'pi.previous_rf_num',
-                'pi.last_updated',
+                'prop.id',
                 'prop.name',
-                'im.item_name',
-                'im.category_id',
-                'im.uom_id',
-                's.sku_code',
-                'u.name',
-                'u.code',
-                'c.name',
-                'b.name',
-                'm.name',
+                DB::raw('COUNT(u.id) as assigned_users_count'),
             ])
+            ->groupBy('prop.id', 'prop.name')
             ->orderBy('prop.name')
-            ->orderBy('im.item_name')
             ->get();
 
-        $properties = DB::table('properties')
-            ->select('id', 'name')
-            ->orderBy('name')
-            ->get();
-
-        $categories = DB::table('categories')
-            ->select('id', 'name')
-            ->orderBy('name')
-            ->get();
-
-        // Count serialized asset_units currently assigned to each property + item
-        $serializedCounts = DB::table('asset_units')
-            ->whereNotNull('property_id')
+        $users = DB::table('users as u')
+            ->leftJoin('properties as prop', 'u.property_id', '=', 'prop.id')
             ->select([
-                'property_id',
-                'item_id',
-                DB::raw('COUNT(*) as serialized_count'),
+                'u.id',
+                'u.fname',
+                'u.lname',
+                'u.username',
+                'u.email',
+                'u.property_id',
+                'prop.name as property_name',
             ])
-            ->groupBy('property_id', 'item_id')
-            ->get()
-            ->keyBy(fn ($row) => "{$row->property_id}_{$row->item_id}");
+            ->orderBy('u.fname')
+            ->orderBy('u.lname')
+            ->get();
 
-        $enrichedInventory = $propertyInventory->map(function ($row) use ($serializedCounts) {
-            $key = "{$row->property_id}_{$row->item_id}";
-            $row->serialized_count = (int) ($serializedCounts->get($key)?->serialized_count ?? 0);
-            return $row;
+        // Render Pages/Settings/Properties.jsx
+        return Inertia::render('Settings/Properties', [
+            'properties' => $properties,
+            'users' => $users,
+        ]);
+    }
+
+    // Create a new property and record an audit log entry
+    public function store(Request $request)
+    {
+        $normalized = $this->normalizePayload($request);
+        $validated = $this->validateProperty($request, $normalized);
+
+        DB::transaction(function () use ($validated) {
+            $propertyId = (int) DB::table('properties')->insertGetId([
+                'name' => $validated['name'],
+            ]);
+
+            $this->writeAuditLog(
+                actionType: 'PROPERTY_CREATE',
+                recordId: $propertyId,
+                description: sprintf(
+                    'Created property %s',
+                    $validated['name']
+                )
+            );
         });
 
-        return Inertia::render('Inventory/PropertyInventory', [
-            'propertyInventory' => $enrichedInventory,
-            'properties' => $properties,
-            'categories' => $categories,
+        return back()->with('success', 'Property created successfully.');
+    }
+
+    // Update an existing property and record an audit log entry
+    public function update(Request $request, int $property)
+    {
+        $existing = DB::table('properties')
+            ->where('id', $property)
+            ->lockForUpdate()
+            ->first();
+
+        abort_unless($existing !== null, 404);
+
+        $normalized = $this->normalizePayload($request);
+        $validated = $this->validateProperty($request, $normalized, (int) $existing->id);
+
+        DB::transaction(function () use ($existing, $validated) {
+            $propertyId = (int) $existing->id;
+            $oldName = (string) $existing->name;
+            $newName = (string) $validated['name'];
+
+            DB::table('properties')
+                ->where('id', $propertyId)
+                ->update([
+                    'name' => $newName,
+                ]);
+
+            $this->writeAuditLog(
+                actionType: 'PROPERTY_UPDATE',
+                recordId: $propertyId,
+                description: sprintf(
+                    'Updated property %s -> %s',
+                    $oldName,
+                    $newName
+                )
+            );
+        });
+
+        return back()->with('success', 'Property updated successfully.');
+    }
+
+    // Delete a property if no dependent records reference it, and record an audit log entry
+    public function destroy(int $property)
+    {
+        $existing = DB::table('properties')
+            ->where('id', $property)
+            ->lockForUpdate()
+            ->first();
+
+        abort_unless($existing !== null, 404);
+
+        DB::transaction(function () use ($existing) {
+            $propertyId = (int) $existing->id;
+            $propertyName = (string) $existing->name;
+
+            // Show a clear message when the property is still assigned to one or more users
+            $assignedUsersCount = (int) DB::table('users')
+                ->where('property_id', $propertyId)
+                ->count();
+
+            if ($assignedUsersCount > 0) {
+                $userLabel = $assignedUsersCount === 1 ? 'user' : 'users';
+
+                throw ValidationException::withMessages([
+                    'property' => [
+                        "Cannot delete {$propertyName} because it is assigned to {$assignedUsersCount} {$userLabel}.",
+                    ],
+                ]);
+            }
+
+            // Guard against deleting properties that still reference inventory, stock-in logs, or asset units
+            $hasInventory = DB::table('property_inventory')
+                ->where('property_id', $propertyId)
+                ->exists();
+
+            $hasStockLogs = DB::table('stock_in_logs')
+                ->where('property_id', $propertyId)
+                ->exists();
+
+            $hasAssetUnits = DB::table('asset_units')
+                ->where('property_id', $propertyId)
+                ->exists();
+
+            if ($hasInventory || $hasStockLogs || $hasAssetUnits) {
+                throw ValidationException::withMessages([
+                    'property' => [
+                        "Cannot delete {$propertyName} because it is still referenced by property inventory, stock-in logs, or asset units.",
+                    ],
+                ]);
+            }
+
+            DB::table('properties')
+                ->where('id', $propertyId)
+                ->delete();
+
+            $this->writeAuditLog(
+                actionType: 'PROPERTY_DELETE',
+                recordId: $propertyId,
+                description: sprintf(
+                    'Deleted property %s',
+                    $propertyName
+                )
+            );
+        });
+
+        return back()->with('success', 'Property deleted successfully.');
+    }
+
+    // Normalize incoming property form fields before validation
+    private function normalizePayload(Request $request): array
+    {
+        $payload = [
+            'name' => filled($request->input('name')) ? trim((string) $request->input('name')) : null,
+        ];
+
+        $request->merge([
+            'name' => $payload['name'],
+        ]);
+
+        return $payload;
+    }
+
+    // Validate property fields and enforce case-insensitive uniqueness on name
+    private function validateProperty(Request $request, array $normalized, ?int $ignoreId = null): array
+    {
+        $uniqueRule = Rule::unique('properties', 'name')
+            ->where(fn ($query) => $query->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower((string) ($normalized['name'] ?? ''))]));
+
+        if ($ignoreId !== null) {
+            $uniqueRule = $uniqueRule->ignore($ignoreId);
+        }
+
+        return $request->validate([
+            'name' => ['required', 'string', 'max:150', $uniqueRule],
+        ]);
+    }
+
+    // Write an audit log row for the current property action
+    private function writeAuditLog(string $actionType, int $recordId, string $description): void
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return;
+        }
+
+        DB::table('audit_logs')->insert([
+            'user_id' => $user->id,
+            'action_type' => $actionType,
+            'table_name' => 'properties',
+            'record_id' => $recordId,
+            'description' => $description,
+            'created_at' => now(),
         ]);
     }
 }

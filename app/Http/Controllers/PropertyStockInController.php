@@ -196,7 +196,8 @@ class PropertyStockInController extends Controller
             ->orderByDesc('au.id')
             ->get();
 
-        return Inertia::render('Inventory/PropertyStockIn', [
+        // Point to the nested PropertyStockIn.jsx view inside Pages/Inventory/Property/
+        return Inertia::render('Inventory/Property/PropertyStockIn', [
             'propertyInventory' => $propertyInventory,
             'stockIns' => $stockIns,
             'items' => $items,
