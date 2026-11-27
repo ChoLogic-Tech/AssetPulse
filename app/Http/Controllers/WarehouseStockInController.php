@@ -126,7 +126,6 @@ class WarehouseStockInController extends Controller
             ->unique('item_id')
             ->keyBy('item_id');
 
-        // Only unstocked units with status 'Available' and no stock_in_log_id can be selected for stock-in
         $availableAssetUnits = DB::table('asset_units as au')
             ->leftJoin('properties as p', 'au.property_id', '=', 'p.id')
             ->where('au.status', 'Available')
@@ -166,9 +165,16 @@ class WarehouseStockInController extends Controller
         $validated = $this->validateStockIn($request, $normalized);
 
         DB::transaction(function () use ($validated) {
+            // Read current warehouse RF before INSERT so we can log the previous RF
+            $prevWarehouseRf = null;
+            if ($validated['property_id'] === null) {
+                $prevWarehouseRf = DB::table('main_inventory')
+                    ->where('item_id', $validated['item_id'])
+                    ->value('rf_num');
+            }
+
             $effectiveSupplierId = $this->resolveEffectiveSupplierId($validated);
 
-            // trg_auto_stock_in automatically updates main_inventory or property_inventory on INSERT
             $stockIn = WarehouseStockin::create([
                 'item_id' => $validated['item_id'],
                 'supplier_id' => $effectiveSupplierId,
@@ -183,16 +189,31 @@ class WarehouseStockInController extends Controller
 
             $this->syncAssetUnits($stockIn->id, $validated, $effectiveSupplierId);
 
+            // Fetch serial numbers attached to this stock-in (empty if non-serialized)
+            $serials = $this->getStockInSerialNumbers((int) $stockIn->id);
+            $serialSuffix = $this->formatSerialSuffix($serials);
+
+            $itemName = $this->getItemName((int) $validated['item_id']);
+            $locationName = $this->getLocationName($validated['property_id'] ?? null);
+            $rfLabel = $this->formatRfNumber((string) $validated['rf_number']);
+
+            $prevRfPart = '';
+            if ($validated['property_id'] === null && filled($prevWarehouseRf) && (string) $prevWarehouseRf !== (string) $validated['rf_number']) {
+                $prevRfPart = ', Prev ' . $this->formatRfNumber((string) $prevWarehouseRf);
+            }
+
             $this->writeAuditLog(
                 actionType: 'STOCK_IN_CREATE',
-                recordId: $stockIn->id,
+                recordId: (int) $stockIn->id,
                 description: sprintf(
-                    'Created stock-in #%d (item_id=%d, qty=%d, rf_number=%s, property_id=%s)',
-                    $stockIn->id,
-                    $validated['item_id'],
+                    'Stocked in %d pcs of %s%s at %s (%s%s, Stock-in table #%d)',
                     $validated['quantity'],
-                    $validated['rf_number'],
-                    $validated['property_id'] ?? 'NULL (Central Warehouse)'
+                    $itemName,
+                    $serialSuffix,
+                    $locationName,
+                    $rfLabel,
+                    $prevRfPart,
+                    $stockIn->id
                 )
             );
         });
@@ -212,6 +233,9 @@ class WarehouseStockInController extends Controller
             $oldQty = (int) $stockIn->quantity;
             $oldRfNumber = (string) $stockIn->rf_number;
             $stockInId = (int) $stockIn->id;
+
+            // Capture old serials before rolling them back
+            $oldSerials = $this->getStockInSerialNumbers($stockInId);
 
             $this->rollbackStockInAssetUnits($stockInId);
             $this->reverseInventoryEffect($oldPropertyId, $oldItemId, $oldQty);
@@ -246,20 +270,34 @@ class WarehouseStockInController extends Controller
 
             $this->syncAssetUnits($stockInId, $validated, $effectiveSupplierId);
 
+            $newSerials = $this->getStockInSerialNumbers($stockInId);
+
+            $oldItemName = $this->getItemName($oldItemId);
+            $oldLocationName = $this->getLocationName($oldPropertyId);
+            $oldRfLabel = $this->formatRfNumber($oldRfNumber);
+            $oldSerialSuffix = $this->formatSerialSuffix($oldSerials);
+
+            $newItemName = $this->getItemName((int) $validated['item_id']);
+            $newLocationName = $this->getLocationName($validated['property_id'] ?? null);
+            $newRfLabel = $this->formatRfNumber((string) $validated['rf_number']);
+            $newSerialSuffix = $this->formatSerialSuffix($newSerials);
+
             $this->writeAuditLog(
                 actionType: 'STOCK_IN_UPDATE',
                 recordId: $stockInId,
                 description: sprintf(
-                    'Updated stock-in #%d from [item=%d, qty=%d, rf=%s, prop=%s] to [item=%d, qty=%d, rf=%s, prop=%s]',
+                    'Updated stock-in table #%d: %s%s at %s (%s, %d pcs) -> %s%s at %s (%s, %d pcs)',
                     $stockInId,
-                    $oldItemId,
+                    $oldItemName,
+                    $oldSerialSuffix,
+                    $oldLocationName,
+                    $oldRfLabel,
                     $oldQty,
-                    $oldRfNumber,
-                    $oldPropertyId ?? 'NULL (Central Warehouse)',
-                    $validated['item_id'],
-                    $validated['quantity'],
-                    $validated['rf_number'],
-                    $validated['property_id'] ?? 'NULL (Central Warehouse)'
+                    $newItemName,
+                    $newSerialSuffix,
+                    $newLocationName,
+                    $newRfLabel,
+                    $validated['quantity']
                 )
             );
         });
@@ -278,20 +316,29 @@ class WarehouseStockInController extends Controller
             $oldRfNumber = (string) $stockIn->rf_number;
             $stockInId = (int) $stockIn->id;
 
+            // Capture serials before detaching them from the deleted stock-in
+            $oldSerials = $this->getStockInSerialNumbers($stockInId);
+
             $this->rollbackStockInAssetUnits($stockInId);
             $this->reverseInventoryEffect($oldPropertyId, $oldItemId, $oldQty);
             $stockIn->delete();
+
+            $oldItemName = $this->getItemName($oldItemId);
+            $oldLocationName = $this->getLocationName($oldPropertyId);
+            $oldRfLabel = $this->formatRfNumber($oldRfNumber);
+            $oldSerialSuffix = $this->formatSerialSuffix($oldSerials);
 
             $this->writeAuditLog(
                 actionType: 'STOCK_IN_DELETE',
                 recordId: $stockInId,
                 description: sprintf(
-                    'Deleted stock-in #%d (item_id=%d, qty=%d, rf_number=%s, property_id=%s)',
+                    'Deleted stock-in table #%d: %d pcs of %s%s at %s (%s)',
                     $stockInId,
-                    $oldItemId,
                     $oldQty,
-                    $oldRfNumber,
-                    $oldPropertyId ?? 'NULL (Central Warehouse)'
+                    $oldItemName,
+                    $oldSerialSuffix,
+                    $oldLocationName,
+                    $oldRfLabel
                 )
             );
         });
@@ -337,7 +384,6 @@ class WarehouseStockInController extends Controller
             }
         }
 
-        // Release pre-existing units back to Available so they can be stocked in again if needed
         DB::table('asset_units')
             ->where('stock_in_log_id', $stockInId)
             ->update([
@@ -599,6 +645,57 @@ class WarehouseStockInController extends Controller
         }
     }
 
+    // Fetch all serial numbers linked to a stock-in record
+    private function getStockInSerialNumbers(int $stockInId): array
+    {
+        return DB::table('asset_units')
+            ->where('stock_in_log_id', $stockInId)
+            ->orderBy('id')
+            ->pluck('serial_number')
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    // Format serial numbers as " (SN: A, B, C)" when present, or "" for bulk items
+    private function formatSerialSuffix(array $serials): string
+    {
+        if (empty($serials)) {
+            return '';
+        }
+
+        return ' (SN: ' . implode(', ', $serials) . ')';
+    }
+
+    private function getItemName(int $itemId): string
+    {
+        return DB::table('item_masterlist')
+            ->where('id', $itemId)
+            ->value('item_name') ?? "Item #{$itemId}";
+    }
+
+    private function getLocationName(?int $propertyId): string
+    {
+        if ($propertyId === null) {
+            return 'Central Warehouse';
+        }
+
+        return DB::table('properties')
+            ->where('id', $propertyId)
+            ->value('name') ?? "Property #{$propertyId}";
+    }
+
+    private function formatRfNumber(string $rfNumber): string
+    {
+        $trimmed = trim($rfNumber);
+        if ($trimmed === '') {
+            return 'RF #N/A';
+        }
+
+        $stripped = preg_replace('/^RF[-#\s]*/i', '', $trimmed);
+        return 'RF #' . ($stripped !== '' ? $stripped : $trimmed);
+    }
+
     private function writeAuditLog(string $actionType, int $recordId, string $description): void
     {
         $user = Auth::user();
@@ -606,17 +703,12 @@ class WarehouseStockInController extends Controller
             return;
         }
 
-        $fullName = trim(($user->fname ?? '') . ' ' . ($user->lname ?? ''));
-        $actorLabel = $fullName !== ''
-            ? "{$fullName} (#{$user->id})"
-            : ($user->email ?? "User #{$user->id}");
-
         DB::table('audit_logs')->insert([
             'user_id' => $user->id,
             'action_type' => $actionType,
             'table_name' => 'stock_in_logs',
             'record_id' => $recordId,
-            'description' => "{$description} — by {$actorLabel}",
+            'description' => $description,
         ]);
     }
-}
+}   

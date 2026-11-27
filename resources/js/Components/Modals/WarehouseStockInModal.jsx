@@ -203,7 +203,7 @@ export function WarehouseStockInModal({
   isViewOnly = false,
   items = [],
   suppliers = [],
-  assetUnits = [],
+  assetUnits = [],  
   lastSuppliers = {},
 }) {
   const [serialMode, setSerialMode] = useState('existing');
@@ -251,13 +251,14 @@ export function WarehouseStockInModal({
   }, [isOpen, mode, initialData]);
 
   const matchingSerials = useMemo(() => {
-    if (!data.item_id) return [];
+    console.log('Selected item_id:', data.item_id, 'Total assetUnits:', assetUnits);
+    if (!data.item_id || !Array.isArray(assetUnits)) return [];
     return assetUnits.filter(
       (unit) =>
+        unit &&
         String(unit.item_id) === String(data.item_id) &&
         (unit.status ?? 'Available') === 'Available' &&
-        !unit.stock_in_log_id &&
-        (unit.property_id === null || unit.property_id === undefined || unit.property_id === '')
+        !unit.stock_in_log_id
     );
   }, [assetUnits, data.item_id]);
 

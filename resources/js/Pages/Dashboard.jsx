@@ -1,377 +1,209 @@
-import React, { useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import React, { useMemo, useState } from 'react';
+// Main authenticated page shell that wraps the dashboard with navigation and header layout
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-
-import MetricCards from '@/Components/Dashboard/MetricCards';
-import RequisitionsTable from '@/Components/Dashboard/RequisitionsTable';
-import ParStockTable from '@/Components/Dashboard/ParStockTable';
+// Inertia helpers for setting the browser <title> and rendering SPA links
+import { Head, Link } from '@inertiajs/react';
+import { Package, Warehouse, Search, History, FileSpreadsheet } from 'lucide-react';
+// Top summary KPI cards component (Total Assets, Low/Out Stock, Pending Requests, Masterlist)
+import DashboardKpiCards from '@/Components/Dashboard/DashboardKpiCards';
+// Quick module shortcut buttons component for fast navigation across inventory modules
+import DashboardQuickLinks from '@/Components/Dashboard/DashboardQuickLinks';
+// Responsive Warehouse Par Stock Overview table component sorted by stock-to-par urgency
+import ParStockOverviewTable from '@/Components/Dashboard/ParStockOverviewTable';
+// Property & Central Warehouse serialized asset count breakdown card
+import PropertyDistributionCard from '@/Components/Dashboard/PropertyDistributionCard';
+// Latest serialized asset units table with search, status filter, and status badge colors
+import DashboardAssetUnitsTable from '@/Components/Dashboard/DashboardAssetUnitsTable';
+// System audit trail log table component that renders filtered activity entries
 import AuditLogsTable from '@/Components/Dashboard/AuditLogsTable';
-import AssetDetailsModal from '@/Components/Dashboard/AssetDetailsModal';
 
-const OVERVIEW_ASSET_LIMIT = 10;
+const OVERVIEW_AUDIT_LOG_LIMIT = 10;
 
-function normalizeAssetUnitRow(row) {
+// Normalize DB audit log fields into the shape expected by AuditLogsTable
+function normalizeAuditLogRow(row) {
   if (!row || typeof row !== 'object') return row;
 
-  const serial = row.serial ?? row.serial_number ?? '';
-  const name = row.name ?? row.item_name ?? 'N/A';
-  const property = row.property ?? row.property_name ?? 'Central Warehouse';
-  const location = row.location ?? row.location_name ?? '';
-  const status = row.status ?? row.asset_status ?? 'Available';
+  const rawDate = row.timestamp ?? row.created_at;
+  const parsedDate = rawDate ? new Date(rawDate) : null;
+  const formattedTimestamp =
+    parsedDate && !Number.isNaN(parsedDate.getTime())
+      ? parsedDate.toLocaleString()
+      : String(rawDate ?? '—');
+
+  const rawTable = String(row.targetType ?? row.table_name ?? 'System');
+  const targetType = row.targetType
+    ? row.targetType
+    : rawTable
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+
+  // Convert underscores to spaces so action badges read cleanly
+  const rawAction = String(row.action ?? row.action_type ?? 'UPDATE')
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
 
   return {
     ...row,
-    id: row.id ?? row.asset_id,
-    serial,
-    serial_number: row.serial_number ?? serial,
-    tag: row.tag ?? row.sku_code ?? row.sku ?? (row.id ? `AST-${row.id}` : '—'),
-    name,
-    item_name: row.item_name ?? name,
-    category: row.category ?? row.category_name ?? row.sku_code ?? row.sku ?? 'Serialized Asset',
-    property,
-    property_name: row.property_name ?? property,
-    location_name: location,
-    assignedTo:
-      row.assignedTo ??
-      row.assigned_to ??
-      (location ? `${property} • ${location}` : property),
-    status,
-    purchaseDate:
-      row.purchaseDate ??
-      row.purchase_date ??
-      (row.date_received ? String(row.date_received).slice(0, 10) : '—'),
-    warrantyExp: row.warrantyExp ?? row.warranty_exp ?? '—',
-    notes:
-      row.notes ??
-      (row.supplier_name ? `Supplier: ${row.supplier_name}` : ''),
+    id: row.id ?? '—',
+    timestamp: formattedTimestamp,
+    user: row.user ?? row.user_name ?? row.username ?? 'System',
+    action: rawAction,
+    targetType,
+    description: row.description ?? '—',
   };
 }
 
-function getLatestTimestamp(asset) {
-  const rawDate = asset.date_received ?? asset.created_at ?? asset.purchaseDate;
-  const parsed = rawDate ? Date.parse(rawDate) : NaN;
-  if (!Number.isNaN(parsed)) return parsed;
-  const numId = Number(asset.id ?? asset.asset_id ?? 0);
-  return Number.isFinite(numId) ? numId : 0;
-}
+export default function Dashboard({ dashboard = {} }) {
+  const {
+    totalAssets = 0,
+    pendingRequests = 0,
+    totalMasterlist = 0,
+    categoriesCount = 0,
+    brandsCount = 0,
+    suppliersCount = 0,
+    parStock = [],
+    lowStockItems = 0,
+    assetUnits = [],
+    propertyDistribution = [],
+    auditLogs = [],
+  } = dashboard;
 
-function DashboardSerializedAssetsTable({
-  assets = [],
-  search = '',
-  onInspect,
-  getStatusBadge,
-  limit = OVERVIEW_ASSET_LIMIT,
-}) {
-  const q = search.trim().toLowerCase();
+  const [auditSearch, setAuditSearch] = useState('');
 
-  const sortedAssets = [...(Array.isArray(assets) ? assets : [])].sort((a, b) => {
-    const timeDiff = getLatestTimestamp(b) - getLatestTimestamp(a);
-    if (timeDiff !== 0) return timeDiff;
-    const idA = Number(a.id ?? a.asset_id ?? 0);
-    const idB = Number(b.id ?? b.asset_id ?? 0);
-    return idB - idA;
-  });
+  const normalizedAuditLogs = useMemo(() => {
+    const list = Array.isArray(auditLogs) ? auditLogs : [];
+    return list.map(normalizeAuditLogRow).slice(0, OVERVIEW_AUDIT_LOG_LIMIT);
+  }, [auditLogs]);
 
-  const filteredRows = sortedAssets.filter((asset) => {
-    if (!q) return true;
-    return (
-      String(asset.serial_number ?? asset.serial ?? '').toLowerCase().includes(q) ||
-      String(asset.item_name ?? asset.name ?? '').toLowerCase().includes(q) ||
-      String(asset.property_name ?? asset.property ?? '').toLowerCase().includes(q) ||
-      String(asset.location_name ?? '').toLowerCase().includes(q) ||
-      String(asset.status ?? '').toLowerCase().includes(q)
-    );
-  });
-
-  const rows = filteredRows.slice(0, limit);
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-xs">
-        <thead className="bg-slate-100 text-slate-600 uppercase text-[11px] font-semibold tracking-wider border-b border-slate-200">
-          <tr>
-            <th className="py-3 px-4">Serial Number</th>
-            <th className="py-3 px-4">Item</th>
-            <th className="py-3 px-4">Property / Location</th>
-            <th className="py-3 px-4">Status</th>
-            <th className="py-3 px-4">Date Received</th>
-            <th className="py-3 px-4 text-right">Details</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100 text-slate-700">
-          {rows.length > 0 ? (
-            rows.map((asset, index) => {
-              const statusVal = asset.status ?? 'Available';
-              return (
-                <tr key={asset.id ?? `${asset.serial}-${index}`} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-3 px-4 font-mono font-semibold text-slate-900">
-                    {asset.serial_number || asset.serial || '—'}
-                  </td>
-                  <td className="py-3 px-4 font-medium text-slate-800">
-                    {asset.item_name || asset.name || '—'}
-                  </td>
-                  <td className="py-3 px-4 text-slate-600">
-                    <div>{asset.property_name || asset.property || 'Central Warehouse'}</div>
-                    {asset.location_name && (
-                      <div className="text-[11px] text-slate-400">{asset.location_name}</div>
-                    )}
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${getStatusBadge(statusVal)}`}>
-                      {statusVal}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-slate-500">
-                    {asset.date_received
-                      ? new Date(asset.date_received).toLocaleDateString()
-                      : asset.purchaseDate || '—'}
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <button
-                      type="button"
-                      onClick={() => onInspect(asset)}
-                      className="px-2.5 py-1 text-[11px] font-medium text-blue-600 hover:bg-blue-50 rounded border border-blue-200 transition-colors"
-                    >
-                      Inspect
-                    </button>
-                  </td>
-                </tr>
-              );
-            })
-          ) : (
-            <tr>
-              <td colSpan="6" className="py-8 text-center text-slate-400">
-                No serialized asset units found.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-      {filteredRows.length > limit && (
-        <div className="px-4 py-2.5 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-          <span>Showing {rows.length} latest of {filteredRows.length} matching units</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function Dashboard({ dashboard }) {
-
-  const metrics = {
-    totalAssets: dashboard?.totalAssets ?? 0,
-    pendingRequests: dashboard?.pendingRequests ?? 0,
-    totalMasterlist: dashboard?.totalMasterlist ?? 0,
-    categoriesCount: dashboard?.categoriesCount ?? 0,
-    brandsCount: dashboard?.brandsCount ?? 0,
-    suppliersCount: dashboard?.suppliersCount ?? 0,
-    lowStockItems: dashboard?.lowStockItems ?? 0,
-  };
-
-  const requests = dashboard?.recentRequests || [
-    { id: 'REQ-2026-089', date: '2026-11-04', property: 'Henann Regency', requester: 'Jerimy Kirk Eriman', item: 'Cat6 Cable (2m)', type: 'Non-Serialized (Par Stock)', qty: 50, status: 'Pending Approval' },
-    { id: 'REQ-2026-088', date: '2026-11-03', property: 'Henann Palm', requester: 'Bine Lopez', item: 'HP LaserJet Toner 85A', type: 'Non-Serialized (Par Stock)', qty: 6, status: 'Approved' },
-    { id: 'REQ-2026-087', date: '2026-11-02', property: 'Henann Lagoon', requester: 'Paul Silverio', item: 'Cisco Access Point Wi-Fi 6', type: 'Serialized Hardware', qty: 4, status: 'Ready for Release' },
-    { id: 'REQ-2026-086', date: '2026-11-01', property: 'Henann Garden', requester: 'Nikki Talunay', item: 'USB-C Docking Stations', type: 'Non-Serialized (Par Stock)', qty: 10, status: 'Fulfilled' },
-  ];
-
-  const parStockInventory = dashboard?.parStock || [
-    { id: 'ITM-501', name: 'Cat6 Patch Cable 2m', category: 'Networking', currentStock: 140, parLevel: 300, variance: '-160 pcs (Short)', status: 'Low Stock' },
-    { id: 'ITM-502', name: 'Cisco AP 9120 Access Point', category: 'Hardware', currentStock: 6, parLevel: 15, variance: '-9 pcs (Short)', status: 'Critical' },
-    { id: 'ITM-503', name: 'Logitech USB Mouse', category: 'Peripherals', currentStock: 45, parLevel: 30, variance: '+15 pcs (Over)', status: 'Optimal' },
-    { id: 'ITM-504', name: 'Zebra Thermal Ribbon 85A', category: 'Consumables', currentStock: 25, parLevel: 20, variance: '+5 pcs (Over)', status: 'Optimal' },
-  ];
-
-  const rawAssetUnits =
-    dashboard?.assetUnits ??
-    dashboard?.serializedAssets ??
-    dashboard?.recentAssets;
-
-  const serializedAssets = Array.isArray(rawAssetUnits)
-    ? rawAssetUnits.map(normalizeAssetUnitRow)
-    : [
-        { serial: 'SN-C02G10X9MD81', serial_number: 'SN-C02G10X9MD81', tag: 'TAG-GH-041', name: 'MacBook Pro 16" M3 Max', item_name: 'MacBook Pro 16" M3 Max', category: 'Laptops', property: 'Henann Regency', property_name: 'Henann Regency', assignedTo: 'Rachel Adams (GM)', status: 'Assigned', purchaseDate: '2025-02-10', warrantyExp: '2027-02-10', notes: 'Deployed to Executive Office' },
-        { serial: 'SN-7X889K2-SRV99', serial_number: 'SN-7X889K2-SRV99', tag: 'TAG-WH-009', name: 'Dell PowerEdge R750 Server', item_name: 'Dell PowerEdge R750 Server', category: 'Servers', property: 'Main Central Warehouse', property_name: 'Main Central Warehouse', assignedTo: 'Unassigned (Vault)', status: 'In Warehouse', purchaseDate: '2024-08-15', warrantyExp: '2028-08-15', notes: 'Infrastructure reserve pool' },
-      ];
-
-  const mostRequestedItems = [
-    { name: 'Cat6 Patch Cable 2m', requests: 42, category: 'Networking' },
-    { name: 'HP LaserJet Toner 85A', requests: 28, category: 'Consumables' },
-    { name: 'Logitech USB Mouse', requests: 19, category: 'Peripherals' },
-    { name: 'USB-C Docking Stations', requests: 14, category: 'Hardware' },
-  ];
-
-  const auditLogs = dashboard?.auditLogs || [
-    { id: 'LOG-901', timestamp: '2026-11-05 14:22', user: 'sysadmin', action: 'RELEASE', targetType: 'Par Stock Item', description: 'Released 50x Cat6 Cable (2m) for REQ-2026-089 to Henann Regency' },
-    { id: 'LOG-900', timestamp: '2026-11-05 11:05', user: 'John Jerald Eriman', action: 'UPDATE', targetType: 'Serialized Asset', description: 'Updated warranty expiration for TAG-BR-112' },
-    { id: 'LOG-899', timestamp: '2026-11-04 16:40', user: 'James Marvin Ragas', action: 'CREATE', targetType: 'Serialized Asset', description: 'Registered new asset TAG-GH-041 (MacBook Pro 16")' },
-  ];
-
-  const propertyDistribution = Array.isArray(dashboard?.propertyDistribution)
-  ? dashboard.propertyDistribution
-  : [
-      { name: 'Henann Regency', assets: 95 },
-      { name: 'Henann Palm', assets: 72 },
-      { name: 'Henann Lagoon', assets: 68 },
-      { name: 'Henann Garden', assets: 60 },
-      { name: 'Henann Park', assets: 54 },
-      { name: 'Henann Crystal', assets: 45 },
-      { name: 'Henann Prime', assets: 41 },
-    ];
-
-  const [activeTab, setActiveTab] = useState('requisitions');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedAsset, setSelectedAsset] = useState(null);
-
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'Fulfilled':
-      case 'Assigned':
-      case 'Available':
-      case 'Optimal':
+  // Match both spaced and underscored variants so stock-in badges have clear colors
+  const getAuditActionBadge = (action) => {
+    switch (action) {
+      case 'CREATE':
+      case 'STOCK IN CREATE':
+      case 'STOCK_IN_CREATE':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'Pending Approval':
-      case 'Under Repair':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'Approved':
-      case 'Ready for Release':
-      case 'Deployed':
-      case 'In Warehouse':
+      case 'UPDATE':
+      case 'STOCK IN UPDATE':
+      case 'STOCK_IN_UPDATE':
         return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'Low Stock':
-      case 'Critical':
-      case 'Decommissioned':
-        return 'bg-red-50 text-red-700 border-red-200 font-semibold';
+      case 'RELEASE':
+        return 'bg-purple-50 text-purple-700 border-purple-200';
+      case 'DELETE':
+      case 'STOCK IN DELETE':
+      case 'STOCK_IN_DELETE':
+        return 'bg-red-50 text-red-700 border-red-200';
       default:
         return 'bg-slate-100 text-slate-700 border-slate-200';
     }
   };
 
-  const getAuditActionBadge = (action) => {
-    switch (action) {
-      case 'CREATE': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'UPDATE': return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'RELEASE': return 'bg-purple-50 text-purple-700 border-purple-200';
-      case 'DELETE': return 'bg-red-50 text-red-700 border-red-200';
-      default: return 'bg-slate-100 text-slate-700 border-slate-200';
-    }
-  };
-
   return (
-    <AuthenticatedLayout>
-      <Head title="Dashboard" />
-
-      <div className="py-6 max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 font-sans text-slate-800 bg-slate-50 min-h-screen">
-        
-        {/* Top Header & Actions Banner */}
-        <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <AuthenticatedLayout
+      header={
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">Dashboard Overview</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Real-time monitoring for multi-property requisitions, warehouse stock, and serialized assets.</p>
+            <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
+              IT Inventory &amp; Asset Dashboard
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Central warehouse par levels, serialized units, property distribution, and system audit trail
+            </p>
           </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-              <button onClick={() => setActiveTab('requisitions')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'requisitions' ? 'bg-white text-slate-900 shadow-sm font-semibold' : 'text-slate-600 hover:text-slate-900'}`}>Stock Requests & Releases</button>
-              <button onClick={() => setActiveTab('parstock')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'parstock' ? 'bg-white text-slate-900 shadow-sm font-semibold' : 'text-slate-600 hover:text-slate-900'}`}>Warehouse Par Stock</button>
-              <button onClick={() => setActiveTab('assets')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'assets' ? 'bg-white text-slate-900 shadow-sm font-semibold' : 'text-slate-600 hover:text-slate-900'}`}>Serialized Assets</button>
-              <button onClick={() => setActiveTab('audit')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'audit' ? 'bg-white text-slate-900 shadow-sm font-semibold' : 'text-slate-600 hover:text-slate-900'}`}>Audit Trail Log</button>
-            </div>
-
-            <button onClick={() => router.visit('/requisitions/create')} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium shadow-sm transition-colors flex items-center gap-1.5">
-              <span>+ New Stock Request</span>
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={route('inventory.warehousestockin.index')}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
+            >
+              <Warehouse className="h-3.5 w-3.5" />
+              Warehouse Stock In
+            </Link>
+            <Link
+              href={route('master-data.assetunits.index')}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+            >
+              <Package className="h-3.5 w-3.5" />
+              Manage Assets
+            </Link>
           </div>
         </div>
+      }
+    >
+      <Head title="Dashboard" />
 
-        {/* Metric Cards */}
-        <MetricCards metrics={metrics} />
+      <div className="py-4 sm:py-6">
+        <div className="mx-auto max-w-7xl space-y-6 px-3 sm:px-6 lg:px-8">
+          {/* Top KPI summary cards */}
+          <DashboardKpiCards
+            totalAssets={totalAssets}
+            lowStockItems={lowStockItems}
+            pendingRequests={pendingRequests}
+            totalMasterlist={totalMasterlist}
+            categoriesCount={categoriesCount}
+            brandsCount={brandsCount}
+            suppliersCount={suppliersCount}
+          />
 
-        {/* Two-Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Left Column: Tabbed Tables Container */}
-          <div className="lg:col-span-2 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-            <div className="border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
-              <div>
-                <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                  {activeTab === 'requisitions' && 'Inter-Property Stock Requisition & Release Queue'}
-                  {activeTab === 'parstock' && 'Main Warehouse Par Stock Table'}
-                  {activeTab === 'assets' && 'Serialized Hardware Directory (Latest 10)'}
-                  {activeTab === 'audit' && 'System Audit Trail Log'}
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {activeTab === 'assets'
-                    ? 'Showing the 10 most recently received serialized asset units'
-                    : 'Manage stock requests, item releases, and system activity logs'}
-                </p>
+          {/* Quick navigation strip to main inventory and master-data pages */}
+          <DashboardQuickLinks />
+
+          {/* Main grid: min-w-0 prevents horizontal overflow inside CSS grid tracks */}
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 min-w-0">
+            <ParStockOverviewTable parStock={parStock} />
+            <PropertyDistributionCard propertyDistribution={propertyDistribution} />
+          </div>
+
+          {/* Serialized asset units overview table */}
+          <DashboardAssetUnitsTable assetUnits={assetUnits} />
+
+          {/* System audit trail log */}
+          <div
+            id="audit-trail"
+            className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm min-w-0"
+          >
+            <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-600 shrink-0">
+                  <History className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-800">
+                    System Audit Trail Log (Latest {OVERVIEW_AUDIT_LOG_LIMIT})
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Showing the {OVERVIEW_AUDIT_LOG_LIMIT} most recent system activity entries
+                  </p>
+                </div>
               </div>
-              
-              <div className="w-full sm:w-56">
+
+              <div className="relative w-full sm:w-64">
+                <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
                 <input
                   type="text"
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
                   placeholder="Filter table..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full text-xs bg-white border border-slate-300 rounded-md px-3 py-1.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none"
                 />
               </div>
             </div>
 
-            {activeTab === 'requisitions' && <RequisitionsTable requests={requests} search={searchTerm} getStatusBadge={getStatusBadge} />}
-            {activeTab === 'parstock' && <ParStockTable items={parStockInventory} search={searchTerm} getStatusBadge={getStatusBadge} />}
-            {activeTab === 'assets' && (
-              <DashboardSerializedAssetsTable
-                assets={serializedAssets}
-                search={searchTerm}
-                onInspect={setSelectedAsset}
-                getStatusBadge={getStatusBadge}
-                limit={OVERVIEW_ASSET_LIMIT}
-              />
-            )}
-            {activeTab === 'audit' && <AuditLogsTable logs={auditLogs} search={searchTerm} getAuditActionBadge={getAuditActionBadge} />}
-          </div>
+            <AuditLogsTable
+              logs={normalizedAuditLogs}
+              search={auditSearch}
+              getAuditActionBadge={getAuditActionBadge}
+            />
 
-          {/* Right Column: Summaries */}
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 space-y-4">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Most Requested Items</h3>
-                <span className="text-[11px] text-slate-400">Top Demand</span>
-              </div>
-              <div className="space-y-3">
-                {mostRequestedItems.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-xs">
-                    <div>
-                      <p className="font-semibold text-slate-800">{item.name}</p>
-                      <span className="text-[10px] text-slate-400">{item.category}</span>
-                    </div>
-                    <span className="font-bold bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full border border-blue-200">{item.requests} reqs</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 space-y-4">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Property Asset Distribution</h3>
-                <span className="text-[11px] text-slate-400">{propertyDistribution.length} Locations</span>
-              </div>
-              <div className="space-y-2.5">
-                {propertyDistribution.map((prop, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-xs">
-                    <span className="font-medium text-slate-700">{prop.name}</span>
-                    <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded">{prop.assets} units</span>
-                  </div>
-                ))}
-              </div>
+            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between border-t border-slate-200 bg-slate-50/60 px-4 sm:px-5 py-3 text-xs text-slate-500">
+              <span className="inline-flex items-center gap-1.5">
+                <FileSpreadsheet className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                Audit records are captured automatically on stock and asset changes
+              </span>
+              <span className="whitespace-nowrap">Capped at {OVERVIEW_AUDIT_LOG_LIMIT} rows on overview</span>
             </div>
           </div>
         </div>
-
-        {/* Modal Component */}
-        <AssetDetailsModal asset={selectedAsset} onClose={() => setSelectedAsset(null)} getStatusBadge={getStatusBadge} />
-
       </div>
     </AuthenticatedLayout>
   );

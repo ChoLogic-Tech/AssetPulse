@@ -138,4 +138,6 @@ return [
 
     'maintenance_allowed_emails' => env('MAINTENANCE_ALLOWED_EMAILS'),
 
+    'version' => env('APP_VERSION', 'v1.0.0'),
+
 ];

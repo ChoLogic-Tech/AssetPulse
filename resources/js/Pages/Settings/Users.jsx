@@ -11,6 +11,43 @@ import { toast } from 'sonner';
 
 const PAGE_SIZE = 10;
 
+const getRoleBadgeStyle = (roleName) => {
+  const normalized = String(roleName || 'Staff').trim().toLowerCase();
+
+  if (normalized === 'super admin' || normalized === 'superadmin') {
+    return {
+      badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      icon: 'text-emerald-600',
+    };
+  }
+
+  if (normalized.includes('admin')) {
+    return {
+      badge: 'bg-purple-50 text-purple-700 border-purple-200',
+      icon: 'text-purple-500',
+    };
+  }
+
+  if (normalized.includes('manager')) {
+    return {
+      badge: 'bg-amber-50 text-amber-700 border-amber-200',
+      icon: 'text-amber-500',
+    };
+  }
+
+  if (normalized.includes('supervisor') || normalized.includes('staff')) {
+    return {
+      badge: 'bg-sky-50 text-sky-700 border-sky-200',
+      icon: 'text-sky-500',
+    };
+  }
+
+  return {
+    badge: 'bg-slate-100 text-slate-700 border-slate-200',
+    icon: 'text-slate-500',
+  };
+};
+
 export default function Users({ users = [], roles = [], properties = [], statuses = [] }) {
   console.log("RAW USERS PROP:", users);
   console.log("RAW ROLES PROP:", roles);
@@ -188,6 +225,8 @@ export default function Users({ users = [], roles = [], properties = [], statuse
                   paginatedUsers.map((user) => {
                     const userStatusValue = user.user_status !== undefined ? user.user_status : user.status;
                     const isActive = String(userStatusValue ?? '').trim().toLowerCase() === 'active';
+                    const roleLabel = user.role_name || 'Staff';
+                    const roleStyle = getRoleBadgeStyle(roleLabel);
 
                     return (
                       <tr key={user.id} className="hover:bg-slate-50/80 transition">
@@ -200,9 +239,11 @@ export default function Users({ users = [], roles = [], properties = [], statuse
                           </div>
                         </td>
                         <td className="py-3.5 px-4">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                            <Shield className="w-3 h-3 text-indigo-500" />
-                            {user.role_name || 'Staff'}
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold border ${roleStyle.badge}`}
+                          >
+                            <Shield className={`w-3 h-3 ${roleStyle.icon}`} />
+                            {roleLabel}
                           </span>
                         </td>
                         <td className="py-3.5 px-4">

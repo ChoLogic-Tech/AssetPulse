@@ -55,6 +55,7 @@ export default function WarehouseStockIn({
   mainInventory = [],
   stockIns = { data: [] },
   items = [],
+  assetUnits = [],
   suppliers = [],
   lastSuppliers = {},
   filters = { search: '' },
@@ -187,6 +188,7 @@ export default function WarehouseStockIn({
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           items={items}
+          assetUnits = {assetUnits}
           suppliers={suppliers}
           recentStockIns={stockIns?.data ?? []}
           lastSuppliers={lastSuppliers}

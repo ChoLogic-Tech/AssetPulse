@@ -5,9 +5,11 @@ import { Wrench, Lock, ShieldCheck, RefreshCw } from 'lucide-react';
 export default function Maintenance({
   title = 'System Under Maintenance',
   message = 'Scheduled system maintenance is currently in progress. Only Super Admin and authorized users can sign in right now.',
+  version,
 }) {
   const { props } = usePage();
   const appName = props?.name || 'AssetPulse';
+  const appVersion = version || props?.appVersion || 'v1.0.0';
 
   const handleRefresh = () => {
     window.location.reload();
@@ -20,9 +22,14 @@ export default function Maintenance({
       <div className="flex-1 flex items-center justify-center">
         <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              {appName}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                {appName}
+              </span>
+              <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-200/70 text-slate-600">
+                {appVersion}
+              </span>
+            </div>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
               <Wrench className="w-3.5 h-3.5" />
               HTTP 503
@@ -42,7 +49,7 @@ export default function Maintenance({
             <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-left flex items-start gap-2.5 text-xs text-slate-600">
               <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
               <span>
-                Standard sessions are paused during maintenance. Only Super Admin and authorized accounts can sign in to perform system updates and verification.
+                Standard sessions are paused during maintenance. Only Super Admin and authorized accounts can sign in to deploy updates ({appVersion}) and run verification.
               </span>
             </div>
 
@@ -69,7 +76,7 @@ export default function Maintenance({
       </div>
 
       <footer className="text-center text-xs text-slate-400 pt-4">
-        {appName} &bull; Maintenance Gate
+        {appName} {appVersion} &bull; Maintenance Gate
       </footer>
     </div>
   );

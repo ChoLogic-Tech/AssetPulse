@@ -55,6 +55,7 @@ class HandleInertiaRequests extends Middleware
                     // Note: remember_token and password are completely omitted here
                 ] : null,
             ],
+            'appVersion' => config('app.version', 'v1.0.0'),
             'client_ip' => $request->ip(),
             'flash' => [
                 'success' => fn () =>$request->session()->get('success'),
