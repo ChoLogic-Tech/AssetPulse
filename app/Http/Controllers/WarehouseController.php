@@ -46,7 +46,7 @@ class WarehouseController extends Controller
         ]);
     }
 
-    // Update baseline par stock for a warehouse item and record an audit log entry
+    // Update baseline par stock for a warehouse item and record a clean audit log entry
     public function updateParstock(Request $request, int $mainInventoryId)
     {
         $validated = $request->validate([
@@ -94,20 +94,18 @@ class WarehouseController extends Controller
             $isInitialSet = $oldPar === 0 && $nextPar > 0;
             $actionType = $isInitialSet ? 'PARSTOCK_CREATE' : 'PARSTOCK_UPDATE';
 
-            // Build a readable audit log description with the table ID
+            // Keep the description concise and readable without table/record IDs
             $description = $isInitialSet
                 ? sprintf(
-                    'Set baseline par stock for %s at Central Warehouse to %s (Main inventory table #%d)',
+                    'Set baseline par stock for %s at Central Warehouse: %s',
                     $itemName,
-                    $nextParText,
-                    $mainInventoryId
+                    $nextParText
                 )
                 : sprintf(
-                    'Updated baseline par stock for %s at Central Warehouse: %s -> %s (Main inventory table #%d)',
+                    'Updated baseline par stock for %s at Central Warehouse: %s -> %s',
                     $itemName,
                     $oldParText,
-                    $nextParText,
-                    $mainInventoryId
+                    $nextParText
                 );
 
             // Insert the audit log for the currently authenticated user

@@ -72,7 +72,7 @@ class AssetUnitController extends Controller
         ]);
     }
 
-    // Validate and register a new serialized asset unit, then write a concise audit log
+    // Validate and register a new serialized asset unit, then write a natural-language audit log
     public function store(Request $request)
     {
         $this->normalizeRequest($request);
@@ -103,14 +103,14 @@ class AssetUnitController extends Controller
 
             if ($locationName !== '' || $unit->status === 'Deployed') {
                 $description = sprintf(
-                    'Deployed 1 %s (%s) in use at %s',
+                    'Deployed 1 %s with serial number %s in use at %s',
                     $uomLabel,
                     $serial,
                     $placeLabel
                 );
             } else {
                 $description = sprintf(
-                    'Registered 1 %s (%s) at %s',
+                    'Registered 1 %s with serial number %s at %s',
                     $uomLabel,
                     $serial,
                     $placeLabel
@@ -127,8 +127,8 @@ class AssetUnitController extends Controller
         return redirect()->back()->with('success', 'Serialized asset unit registered.');
     }
 
-    // Validate and update an existing serialized asset unit, then write a concise audit log
-    public function update(Request $request, $assetunit)
+    // Validate and update an existing serialized asset unit, then write a natural-language audit log
+    public function update(Request $request, AssetUnits|int|string $assetunit)
     {
         $assetUnit = $assetunit instanceof AssetUnits
             ? $assetunit
@@ -166,22 +166,22 @@ class AssetUnitController extends Controller
                 ? ((string) DB::table('properties')->where('id', $newPropertyId)->value('name') ?: 'Central Warehouse')
                 : 'Central Warehouse';
 
-            // Collect non-room changes so we don't repeat the room assignment
+            // Collect non-room changes using readable "from ... to ..." phrasing
             $otherChanges = [];
 
             if ($oldSerial !== $newSerial) {
-                $otherChanges[] = "Serial: {$oldSerial} -> {$newSerial}";
+                $otherChanges[] = "serial number from {$oldSerial} to {$newSerial}";
             }
 
             if ($oldStatus !== $newStatus) {
-                $otherChanges[] = "Status: {$oldStatus} -> {$newStatus}";
+                $otherChanges[] = "status from {$oldStatus} to {$newStatus}";
             }
 
             if ($oldPropertyId !== $newPropertyId) {
                 $oldPropName = $oldPropertyId
                     ? (DB::table('properties')->where('id', $oldPropertyId)->value('name') ?: 'Central Warehouse')
                     : 'Central Warehouse';
-                $otherChanges[] = "Property: {$oldPropName} -> {$newPropName}";
+                $otherChanges[] = "property from {$oldPropName} to {$newPropName}";
             }
 
             $isNewlyDeployedToLocation =
@@ -191,11 +191,11 @@ class AssetUnitController extends Controller
             if ($isNewlyDeployedToLocation) {
                 $placeLabel = $newLocName !== '' ? $newLocName : $newPropName;
                 $extraNotes = !empty($otherChanges)
-                    ? ' (' . implode(', ', $otherChanges) . ')'
+                    ? ', changed ' . implode(', ', $otherChanges)
                     : '';
 
                 $description = sprintf(
-                    'Deployed 1 %s (%s) in use at %s%s',
+                    'Deployed 1 %s with serial number %s in use at %s%s',
                     $uomLabel,
                     $newSerial,
                     $placeLabel,
@@ -209,12 +209,12 @@ class AssetUnitController extends Controller
                         ? (DB::table('locations')->where('id', $oldLocationId)->value('name') ?: 'Unassigned')
                         : 'Unassigned';
                     $currentLocLabel = $newLocName !== '' ? $newLocName : 'Unassigned';
-                    $allChanges[] = "Room: {$oldLocName} -> {$currentLocLabel}";
+                    $allChanges[] = "room from {$oldLocName} to {$currentLocLabel}";
                 }
 
                 $description = !empty($allChanges)
-                    ? sprintf('Updated 1 %s (%s) — %s', $uomLabel, $newSerial, implode(', ', $allChanges))
-                    : sprintf('Updated 1 %s (%s)', $uomLabel, $newSerial);
+                    ? sprintf('Updated 1 %s with serial number %s, changed %s', $uomLabel, $newSerial, implode(', ', $allChanges))
+                    : sprintf('Updated 1 %s with serial number %s', $uomLabel, $newSerial);
             }
 
             $this->writeAuditLog(
@@ -227,8 +227,8 @@ class AssetUnitController extends Controller
         return redirect()->back()->with('success', 'Serialized asset unit updated.');
     }
 
-    // Delete an asset unit unless deployed or referenced by movement/release history, and write a concise audit log
-    public function destroy($assetunit)
+    // Delete an asset unit unless deployed or referenced by movement/release history, and write a natural-language audit log
+    public function destroy(AssetUnits|string|int $assetunit)
     {
         $assetUnit = $assetunit instanceof AssetUnits
             ? $assetunit
@@ -257,7 +257,7 @@ class AssetUnitController extends Controller
                 $this->writeAuditLog(
                     actionType: 'ASSET_UNIT_DELETE',
                     recordId: $unitId,
-                    description: sprintf('Deleted 1 %s (%s)', $uomLabel, $serial)
+                    description: sprintf('Deleted 1 %s with serial number %s', $uomLabel, $serial)
                 );
             });
         } catch (QueryException $e) {
